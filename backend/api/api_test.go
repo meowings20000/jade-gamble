@@ -256,15 +256,25 @@ func TestMarketFlow(t *testing.T) {
 	// lists it at 1000
 	alice.do("POST", "/api/market/list", map[string]any{"stone_id": stoneID, "ask_price": 1000})
 
-	// bob sees it
+	// bob sees it (plus his own private 礦區直送 pool)
 	mkt := bob.do("GET", "/api/market", nil)
 	listings := mkt["listings"].([]any)
-	if len(listings) != 1 {
-		t.Fatalf("listings: %v", listings)
+	var l map[string]any
+	for _, it := range listings {
+		cand := it.(map[string]any)
+		if cand["stone_id"].(string) == stoneID {
+			l = cand
+			break
+		}
 	}
-	l := listings[0].(map[string]any)
+	if l == nil {
+		t.Fatalf("alice's listing not visible to bob: %v", listings)
+	}
 	if _, ok := l["seller_id"]; ok {
 		t.Fatal("market listing leaks seller_id")
+	}
+	if _, ok := l["seller"]; ok {
+		t.Fatal("拍賣必須匿名 — listing leaks seller name")
 	}
 	// no truth leak
 	for _, leak := range []string{"quality", "variety", "crack_cells"} {
@@ -361,4 +371,76 @@ func TestStrictJSON(t *testing.T) {
 		t.Fatal("trailing JSON accepted")
 	}
 	_ = c
+}
+
+// TestMarketNPCPoolsPrivate: 礦區直送 pools are per-player — two players must
+// never see the same pool stone (otherwise "who bought what" leaks where the
+// good stones are), and a player cannot buy someone else's pool entry.
+func TestMarketNPCPoolsPrivate(t *testing.T) {
+	srv, _ := setup(t)
+	alice := newClient(t, srv, "npc_alice")
+	bob := newClient(t, srv, "npc_bob")
+
+	am := alice.do("GET", "/api/market", nil)["listings"].([]any)
+	bm := bob.do("GET", "/api/market", nil)["listings"].([]any)
+	if len(am) == 0 || len(bm) == 0 {
+		t.Fatalf("pools not stocked: alice=%d bob=%d", len(am), len(bm))
+	}
+	// every entry so far is an NPC stone
+	aset := map[string]bool{}
+	for _, it := range am {
+		m := it.(map[string]any)
+		if m["npc"] != true {
+			t.Fatalf("expected npc listing, got %v", m)
+		}
+		aset[m["stone_id"].(string)] = true
+	}
+	for _, it := range bm {
+		m := it.(map[string]any)
+		if aset[m["stone_id"].(string)] {
+			t.Fatalf("stone %s appears in BOTH players' pools — pools must be private", m["stone_id"])
+		}
+	}
+
+	// bob cannot buy alice's pool entry (IDs are visible but scoped)
+	aliceID := int(am[0].(map[string]any)["id"].(float64))
+	if _, err := post(bob, "/api/market/buy", map[string]any{"listing_id": aliceID}); err == nil {
+		t.Fatal("bob bought a pool stone that belongs to alice")
+	}
+
+	// alice CAN buy an affordable pool stone; the mine sinks the chips
+	before := alice.do("GET", "/api/me", nil)["chips"].(float64)
+	buyIC := -1
+	ask := 0
+	for _, it := range am {
+		m := it.(map[string]any)
+		a := int(m["ask_price"].(float64))
+		if a <= int(before) {
+			buyIC = int(m["id"].(float64))
+			ask = a
+			break
+		}
+	}
+	if buyIC < 0 {
+		t.Fatalf("no affordable pool stone for %v chips", before)
+	}
+	res := alice.do("POST", "/api/market/buy", map[string]any{"listing_id": buyIC})
+	if int(res["chips"].(float64)) != int(before)-ask {
+		t.Fatalf("pool buy charge: before=%v ask=%d after=%v", before, ask, res["chips"])
+	}
+	inv := alice.do("GET", "/api/inventory", nil)["stones"].([]any)
+	if len(inv) != 1 {
+		t.Fatalf("bought pool stone not in inventory: %v", inv)
+	}
+	// the pool refills on the next market view (still 6)
+	am2 := alice.do("GET", "/api/market", nil)["listings"].([]any)
+	n := 0
+	for _, it := range am2 {
+		if it.(map[string]any)["npc"] == true {
+			n++
+		}
+	}
+	if n != 6 {
+		t.Fatalf("pool after buy: want 6 npc stones, got %d", n)
+	}
 }

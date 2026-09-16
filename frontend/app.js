@@ -495,7 +495,7 @@ async function loadMarket() {
     card.appendChild(price);
     const seller = document.createElement('div');
     seller.className = 'meta';
-    seller.textContent = '賣家：' + l.seller + ' · ' + ['公斤料', '表現料', '開窗料'][l.grade];
+    seller.textContent = (l.npc ? '⛏ 礦區直送' : '🕶 匿名賣家') + ' · ' + ['公斤料', '表現料', '開窗料'][l.grade];
     card.appendChild(seller);
     const hint = document.createElement('div');
     hint.className = 'hint';

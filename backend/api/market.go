@@ -13,25 +13,86 @@ import (
 // ---------- 竞标市场 ----------
 
 func (a *API) marketList(w http.ResponseWriter, r *http.Request) error {
-	listings, err := a.Store.OpenListings(50)
+	uid, ok := a.mustUser(w, r)
+	if !ok {
+		return nil
+	}
+	// 礦區直送: each player has a PRIVATE pool of fair-roll stones, so
+	// nobody can infer where the good stones are by watching others buy.
+	a.restockNPC(uid)
+	playerListings, err := a.Store.OpenListings(50)
 	if err != nil {
 		return err
 	}
-	if listings == nil {
-		listings = []store.Listing{}
+	pool, err := a.Store.NPCPoolListings(uid)
+	if err != nil {
+		return err
 	}
-	writeJSON(w, 200, map[string]any{"listings": publicListings(listings)})
+	out := append(publicListings(playerListings), publicListings(pool)...)
+	writeJSON(w, 200, map[string]any{"listings": out})
 	return nil
 }
 
-// publicListings hides seller identity details beyond the username.
+// npcRestockTarget: how many NPC stones each player's pool keeps.
+const npcRestockTarget = 6
+
+// restockNPC tops up THIS player's private pool with fair stones (same
+// quality distribution as shop shelves) listed at a 25%~60% premium. Truth
+// is fixed at generation; the buyer gambles on grade + hint, same as shop.
+func (a *API) restockNPC(uid int) {
+	n, err := a.Store.CountNPCPool(uid)
+	if err != nil || n >= npcRestockTarget {
+		return
+	}
+	for i := n; i < npcRestockTarget; i++ {
+		// Weighted toward affordable grades (公斤料 50% / 表現料 33% / 開窗料 17%)
+		// so a fresh 10k player can actually bid. High grades still appear.
+		roll := domain.RandSource.Intn(6)
+		grade := domain.KiloGrade
+		switch {
+		case roll < 3:
+			grade = domain.KiloGrade
+		case roll < 5:
+			grade = domain.FeatureGrade
+		default:
+			grade = domain.WindowGrade
+		}
+		st := domain.GenerateStone(grade, domain.RandSource)
+		st.State = domain.StateListed // NPC stock: listed, not owned
+		st.Origin = "market"          // 礦區直送
+		premium := 1.25 + domain.RandSource.Float64()*0.35
+		ask := int(float64(st.Price) * premium)
+		if ask < 1 {
+			ask = 1
+		}
+		if err := a.Store.SaveStone(st); err != nil {
+			return
+		}
+		if err := a.Store.CreateNPCPoolStone(uid, st.ID, ask); err != nil {
+			return
+		}
+	}
+}
+
+// npcIDOffset separates pool IDs from player-listing IDs in the public
+// payload so a single "listing_id" field can address both.
+const npcIDOffset = 1_000_000_000
+
+func isNPCID(id int) bool { return id >= npcIDOffset }
+
+// publicListings: 拍賣匿名 — seller identity never leaves the server.
 func publicListings(in []store.Listing) []map[string]any {
 	out := []map[string]any{}
 	for _, l := range in {
+		pubID := l.ID
+		if l.SellerID == 0 {
+			pubID += npcIDOffset
+		}
 		out = append(out, map[string]any{
-			"id": l.ID, "stone_id": l.StoneID, "seller": l.SellerName,
+			"id": pubID, "stone_id": l.StoneID,
 			"ask_price": l.AskPrice, "grade": l.Grade, "seed": l.Seed,
 			"light_hint": l.LightHint, "window_desc": l.WindowDesc,
+			"npc": l.SellerID == 0,
 		})
 	}
 	return out
@@ -87,6 +148,29 @@ func (a *API) marketBuy(w http.ResponseWriter, r *http.Request) error {
 	if err := readJSON(w, r, &body); err != nil {
 		return err
 	}
+	var bal int
+	if isNPCID(body.ListingID) {
+		// 礦區直送: private pool entry, chips sink into the mine.
+		l, err := a.Store.GetNPCPoolListing(uid, body.ListingID-npcIDOffset)
+		if err != nil {
+			return err
+		}
+		if err := a.Store.WithTx(func(tx *store.Tx) error {
+			if err := a.Store.DeleteNPCPoolStoneTx(tx, l.ID, uid); err != nil {
+				return err
+			}
+			b, err := store.UpdateChipsTx(tx, uid, -l.AskPrice)
+			if err != nil {
+				return err
+			}
+			bal = b
+			return a.Store.SetStoneStateTx(tx, l.StoneID, domain.StateOwned, uid)
+		}); err != nil {
+			return err
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "chips": bal, "stone_id": l.StoneID})
+		return nil
+	}
 	l, err := a.Store.GetListing(body.ListingID)
 	if err != nil {
 		return err
@@ -94,7 +178,6 @@ func (a *API) marketBuy(w http.ResponseWriter, r *http.Request) error {
 	if l.SellerID == uid {
 		return errors.New("不能买自己挂的单")
 	}
-	var bal int
 	if err := a.Store.WithTx(func(tx *store.Tx) error {
 		if err := a.Store.BuyListingTx(tx, l.ID, uid); err != nil {
 			return err
@@ -104,9 +187,8 @@ func (a *API) marketBuy(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 		bal = b
-		// seller receives price minus 5% commission
-		_, err = tx.Exec(`UPDATE users SET chips = chips + ? WHERE id=?`, l.AskPrice-l.AskPrice/20, l.SellerID)
-		if err != nil {
+		// anonymous seller still gets paid server-side (95% after commission)
+		if _, err = tx.Exec(`UPDATE users SET chips = chips + ? WHERE id=?`, l.AskPrice-l.AskPrice/20, l.SellerID); err != nil {
 			return err
 		}
 		return a.Store.SetStoneStateTx(tx, l.StoneID, domain.StateOwned, uid)

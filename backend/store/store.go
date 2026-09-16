@@ -135,8 +135,16 @@ func (s *Store) migrate() error {
 			payout INTEGER NOT NULL,
 			created_at TEXT NOT NULL DEFAULT (datetime('now'))
 		)`,
+		`CREATE TABLE IF NOT EXISTS npc_pool (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			stone_id TEXT NOT NULL,
+			ask_price INTEGER NOT NULL,
+			created_at TEXT NOT NULL DEFAULT (datetime('now'))
+		)`,
 		`CREATE INDEX IF NOT EXISTS idx_stones_owner ON stones(owner_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_listings_open ON listings(sold, created_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_npc_pool_user ON npc_pool(user_id)`,
 	}
 	for _, stmt := range stmts {
 		if _, err := s.db.Exec(stmt); err != nil {

@@ -193,9 +193,9 @@ func (s *Store) CreateListingTx(tx *sql.Tx, stoneID string, sellerID, askPrice i
 // OpenListings returns open listings with stone summaries.
 func (s *Store) OpenListings(limit int) ([]Listing, error) {
 	rows, err := s.db.Query(`SELECT l.id, l.stone_id, l.seller_id, l.ask_price,
-		u.username, st.grade, st.seed, st.light_hint, st.ink_hidden
+		COALESCE(u.username, '礦區直送'), st.grade, st.seed, st.light_hint, st.ink_hidden
 		FROM listings l
-		JOIN users u ON u.id = l.seller_id
+		LEFT JOIN users u ON u.id = l.seller_id
 		JOIN stones st ON st.id = l.stone_id
 		WHERE l.sold = 0 ORDER BY l.created_at DESC LIMIT ?`, limit)
 	if err != nil {
@@ -230,14 +230,89 @@ type Listing struct {
 	WindowDesc string `json:"window_desc"`
 }
 
+// CountNPCPool: stones left in THIS user's private 礦區直送 pool.
+func (s *Store) CountNPCPool(userID int) (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM npc_pool WHERE user_id=?`, userID).Scan(&n)
+	return n, err
+}
+
+// CreateNPCPoolStone: a fair-roll stone listed privately for one user.
+func (s *Store) CreateNPCPoolStone(userID int, stoneID string, ask int) error {
+	_, err := s.db.Exec(`INSERT INTO npc_pool (user_id, stone_id, ask_price) VALUES (?,?,?)`,
+		userID, stoneID, ask)
+	return err
+}
+
+// NPCPoolListings: this user's pool entries joined to their stones.
+func (s *Store) NPCPoolListings(userID int) ([]Listing, error) {
+	rows, err := s.db.Query(`SELECT np.id, np.stone_id, 0, np.ask_price,
+		st.grade, st.seed, st.light_hint, st.ink_hidden
+		FROM npc_pool np
+		JOIN stones st ON st.id = np.stone_id
+		WHERE np.user_id=? ORDER BY np.id`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Listing
+	for rows.Next() {
+		var l Listing
+		var seedInt int64
+		if err := rows.Scan(&l.ID, &l.StoneID, &l.SellerID, &l.AskPrice,
+			&l.Grade, &seedInt, &l.LightHint, &l.InkHidden); err != nil {
+			return nil, err
+		}
+		l.Seed = uint64(seedInt)
+		l.SellerName = "礦區直送"
+		out = append(out, l)
+	}
+	return out, rows.Err()
+}
+
+// GetNPCPoolListing: one pool entry for this user (buy path).
+func (s *Store) GetNPCPoolListing(userID, poolID int) (*Listing, error) {
+	var l Listing
+	var seedInt int64
+	err := s.db.QueryRow(`SELECT np.id, np.stone_id, 0, np.ask_price,
+		st.grade, st.seed, st.light_hint, st.ink_hidden
+		FROM npc_pool np
+		JOIN stones st ON st.id = np.stone_id
+		WHERE np.id=? AND np.user_id=?`, poolID, userID).Scan(
+		&l.ID, &l.StoneID, &l.SellerID, &l.AskPrice,
+		&l.Grade, &seedInt, &l.LightHint, &l.InkHidden)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	l.Seed = uint64(seedInt)
+	l.SellerName = "礦區直送"
+	return &l, nil
+}
+
+// DeleteNPCPoolStoneTx removes a bought pool entry atomically.
+func (s *Store) DeleteNPCPoolStoneTx(tx *sql.Tx, poolID, userID int) error {
+	res, err := tx.Exec(`DELETE FROM npc_pool WHERE id=? AND user_id=?`, poolID, userID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return errors.New("pool listing already sold")
+	}
+	return nil
+}
+
 // GetListing fetches one open listing.
 func (s *Store) GetListing(id int) (*Listing, error) {
 	var l Listing
 	var seedInt int64
 	err := s.db.QueryRow(`SELECT l.id, l.stone_id, l.seller_id, l.ask_price,
-		u.username, st.grade, st.seed, st.light_hint, st.ink_hidden
+		COALESCE(u.username, '礦區直送'), st.grade, st.seed, st.light_hint, st.ink_hidden
 		FROM listings l
-		JOIN users u ON u.id = l.seller_id
+		LEFT JOIN users u ON u.id = l.seller_id
 		JOIN stones st ON st.id = l.stone_id
 		WHERE l.id=? AND l.sold=0`, id).Scan(
 		&l.ID, &l.StoneID, &l.SellerID, &l.AskPrice,

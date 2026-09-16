@@ -82,9 +82,13 @@ item4 = shop['grades'][0]['items'][0]
 call('POST', '/api/shop/buy', {'stone_id': item4['id']})
 call('POST', '/api/market/list', {'stone_id': item4['id'], 'ask_price': 500})
 mkt = call2('GET', '/api/market')
-assert len(mkt['listings']) >= 1
-l = mkt['listings'][0]
-print('✓ listing up:', l['seller'], l['ask_price'])
+l = next((x for x in mkt['listings'] if x['stone_id'] == item4['id']), None)
+assert l is not None, 'seller listing not visible'
+assert 'seller' not in l and 'seller_id' not in l, 'listing must be anonymous'
+print('✓ listing up (匿名):', l['ask_price'])
+# 礦區直送 pool is private per player
+npc_b = [x for x in mkt['listings'] if x.get('npc')]
+assert npc_b, 'buyer sees no 礦區直送 stock'
 r = call2('POST', '/api/market/buy', {'listing_id': l['id']})
 print('✓ buyer got', r['stone_id'])
 
