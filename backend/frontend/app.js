@@ -54,7 +54,7 @@ document.querySelectorAll('nav button').forEach(b =>
        exchange: () => { loadExchange(); if (typeof loadRewards === 'function') loadRewards(); },
        collection: loadCollection, ranks: loadRanks,
        transfer: loadTransfers, admin: loadAdmin, history: loadHistory, bank: loadBank,
-       heist: (typeof loadHeist === 'function' ? loadHeist : loadShop) })[b.dataset.view]();
+       heist: (typeof loadHeist === 'function' ? (() => { loadHeist(); if (typeof heistEnsurePoll === 'function') heistEnsurePoll(); if (!window.__heistTick) window.__heistTick = setInterval(() => { const v = document.getElementById('view-heist'); if (v && v.classList.contains('active') && typeof loadHeist === 'function') { loadHeist(); if (typeof heistSyncChips === 'function') heistSyncChips(); } }, 2500); }) : loadShop) })[b.dataset.view]();
   }));
 
 

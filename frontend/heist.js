@@ -1,3 +1,12 @@
+// 只要奪寶頁是開著的就不停更新（大廳排隊也要即時，不能只有坐在桌上才更新）
+function heistEnsurePoll() {
+  if (HEIST_POLL) return;
+  HEIST_POLL = setInterval(() => {
+    const v = document.getElementById('view-heist');
+    if (v && v.classList.contains('active')) { loadHeist(); heistSyncChips(); }
+  }, 2500);
+}
+
 // 上一輪投背叛打我的人是誰（只有死裏逃生那位看得到，名字由後端 hunters 提供）
 function heistHunters(h) {
   if (!h || !Array.isArray(h.hunters)) return [];
@@ -12,6 +21,7 @@ const HEIST_GRADES = [['kilo', '公斤料', 0], ['feature', '表現料', 1], ['w
 function heistStopPoll() { if (HEIST_POLL) { clearInterval(HEIST_POLL); HEIST_POLL = null; } }
 
 async function loadHeist() {
+  heistEnsurePoll();
   const el = document.getElementById('heist-body');
   if (!el) return;
   let d;
@@ -59,7 +69,7 @@ function renderHeist(d) {
           return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
             <b>${name}桌 #${q.id}</b>　${q.count}/${q.need} 人
             ${q.missing > 0 ? `<span style="color:var(--gold)">還缺 ${q.missing} 人成團</span>` : '<span style="color:#5fbf7f">已開局</span>'}
-            <div style="color:var(--muted);font-size:12px">${(q.names || []).map(esc).join('、')}${q.bot_in > 0 && q.missing > 0 ? `　（${q.bot_in} 秒後補 bot）` : ''}</div>
+            <div style="color:var(--muted);font-size:12px">${(q.names || []).map(esc).join('、')}${q.bot_in > 0 && q.missing > 0 ? `　（${heistMmss(q.bot_in)} 後補 bot）` : ''}</div>
           </div>`;
         }).join('') : '<div style="color:var(--muted);font-size:13px">目前沒有人在排隊，你可以先開一桌</div>'}
       </div>`;
@@ -112,7 +122,7 @@ function renderHeist(d) {
 
   if (!done) {
     heistStopPoll();
-    HEIST_POLL = setInterval(() => { if (document.getElementById('view-heist').classList.contains('active')) loadHeist(); }, 2500);
+    heistEnsurePoll();
   } else {
     heistStopPoll();
   }
@@ -220,3 +230,5 @@ setInterval(() => {
   }
   el.style.color = left <= 5 ? '#ff8a8a' : '#ffd977';
 }, 1000);
+
+heistEnsurePoll();
