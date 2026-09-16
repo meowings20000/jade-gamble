@@ -56,12 +56,12 @@ cd .. && python scripts/e2e_smoke.py           # 對 live Docker 全流程（登
 
 容器預設 `MOCK_AUTH=1`（訪客試玩）。接真 Discord：
 
-1. 到 [Discord Developer Portal](https://discord.com/developers/applications) → 你的應用（Client ID `1545656116866977792`）→ **OAuth2** → 複製／重設 **Client Secret**。
-2. 在同一頁 **Redirects** 加入：`http://localhost:3002/api/auth/discord/callback`（公網部署填對外網址）。
+1. 到 [Discord Developer Portal](https://discord.com/developers/applications) → 你的應用（Client ID `1549397605623275520`）→ **OAuth2** → 複製／重設 **Client Secret**。
+2. 在同一頁 **Redirects** 加入：`https://<你的對外網址>/api/auth/discord/callback`（本機測試用 `http://localhost:3002/api/auth/discord/callback`）。
 3. 填入 `.env`：
 
 ```bash
-DISCORD_CLIENT_ID=1545656116866977792
+DISCORD_CLIENT_ID=1549397605623275520
 DISCORD_CLIENT_SECRET=貼上你的 Secret
 DISCORD_REDIRECT_URI=http://localhost:3002/api/auth/discord/callback
 ```
