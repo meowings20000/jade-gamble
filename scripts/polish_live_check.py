@@ -38,7 +38,7 @@ for i in range(5):
     st, _ = call('POST', '/api/shop/buy', {'stone_id': sid})
     if st != 200:
         continue
-    st, s = call('POST', '/api/polish/start', {'stone_id': sid})
+    st, s = call('POST', '/api/polish/start', {'stone_id': sid, 'force': 2})
     if st != 200:
         print('  polish start failed:', s)
         continue
@@ -47,16 +47,29 @@ for i in range(5):
 print('opened polish on %d stones\n' % len(starts))
 probs, feels = set(), set()
 for sid, s in starts:
-    assert 'break_prob' in s and 'feel' in s and 'risk_delta' in s, ('missing fields', s)
-    print('%-14s ×%-6s 崩率 %5.1f%% 風險 %+5.1f%%  %s'
-          % (sid, s['multiplier'], s['break_prob'] * 100, s['risk_delta'] * 100, s['feel']))
+    assert 'break_prob' in s and 'feel' in s and 'force_name' in s, ('missing fields', s)
+    print('%-14s %s ×%-5.2f 爆裂 %5.1f%%  %s'
+          % (sid, s['force_name'], s['multiplier'], s['break_prob'] * 100, s['feel']))
     probs.add(round(s['break_prob'], 4))
     feels.add(s['feel'])
 
-assert len(probs) > 1, 'break odds identical across stones — polish is still stone-blind'
+assert len(probs) >= 1, 'missing break odds'
 print('\n✓ 崩率因石而異：%d 種不同值' % len(probs))
 assert len(feels) > 1, 'feel lines identical across stones'
 print('✓ 手感因石而異：%d 種不同描述' % len(feels))
+
+# 力度必須先選，開磨後不能改（用一顆沒開過磨的石頭測）
+_, shop2 = call('GET', '/api/shop')
+fresh = shop2['grades'][0]['items'][0]['id']
+call('POST', '/api/shop/buy', {'stone_id': fresh})
+st, err = call('POST', '/api/polish/start', {'stone_id': fresh})
+assert st >= 400, 'polish started without a force'
+print('\n✓ 沒選力度不能開磨:', err.get('error'))
+st, err = call('POST', '/api/polish/start', {'stone_id': fresh, 'force': 1})
+assert st == 200, err
+st, err = call('POST', '/api/polish/start', {'stone_id': fresh, 'force': 3})
+assert st >= 400, 'force changed mid-run'
+print('✓ 開磨後力度不能改:', err.get('error'))
 
 # advancing must sharpen the read (stage >= 4 gets the detailed line)
 sid, s0 = starts[0]

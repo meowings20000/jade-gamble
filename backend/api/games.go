@@ -17,6 +17,7 @@ func (a *API) polishStart(w http.ResponseWriter, r *http.Request) error {
 	}
 	var body struct {
 		StoneID string `json:"stone_id"`
+		Force   int    `json:"force"` // 1 輕磨 / 2 正磨 / 3 重磨（resume 時可省略）
 	}
 	if err := readJSON(w, r, &body); err != nil {
 		return err
@@ -31,25 +32,34 @@ func (a *API) polishStart(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	if prog == nil {
-		// insurance coupon reduces break chance by 8pp? no — insurance refunds.
+		if body.Force < domain.PolishForceLight || body.Force > domain.PolishForceHeavy {
+			return errors.New("先選磨石力度（輕磨／正磨／重磨）")
+		}
+		// 開磨損耗：皮殼一磨掉就不值原石價
 		breakMod := 0.0
 		has, _ := a.Store.HasActiveBuff(uid, "polish_touch", nowUTC())
 		if has {
 			breakMod = 0.08
 		}
-		if err := a.Store.SavePolishProgress(st.ID, uid, 0, true, breakMod); err != nil {
+		if err := a.Store.SavePolishProgress(st.ID, uid, 0, true, breakMod, body.Force); err != nil {
 			return err
 		}
 		prog, _ = a.Store.GetPolishProgress(st.ID)
+	} else if body.Force >= domain.PolishForceLight && body.Force <= domain.PolishForceHeavy &&
+		body.Force != prog.Force {
+		return errors.New("力度開磨後不能改")
 	}
-	ps := &domain.PolishState{Stage: prog.Stage, Alive: prog.Alive}
 	writeJSON(w, 200, map[string]any{
 		"stone_id": st.ID, "seed": seedStr(st.Seed),
-		"stage": prog.Stage, "multiplier": domain.DefaultPolish.Multipliers[prog.Stage],
-		"ladder": domain.DefaultPolish.Multipliers, "alive": prog.Alive,
-		"break_prob": ps.BreakProbAt(st, prog.BreakMod),
-		"feel":       domain.PolishFeel(st, prog.Stage),
-		"risk_delta": domain.PolishRiskDelta(st),
+		"stage": prog.Stage, "multiplier": domain.PolishMultiplier(st, prog.Stage),
+		"ladder": map[string]any{
+			"start": domain.PolishStartMult, "gain": domain.PolishStepGain,
+			"top": domain.PolishCeilingFor(st), "max_stage": domain.PolishMaxStage,
+		},
+		"alive": prog.Alive, "force": prog.Force, "force_name": domain.PolishForceName(prog.Force),
+		"break_prob": domain.PolishBreakProb(st, prog.Force, prog.BreakMod),
+		"feel":       domain.PolishFeel(st, prog.Force),
+		"at_top":     prog.Stage >= domain.PolishMaxStage,
 	})
 	return nil
 }
@@ -76,23 +86,26 @@ func (a *API) polishAdvance(w http.ResponseWriter, r *http.Request) error {
 	if !prog.Alive {
 		return errors.New("这颗石头已经磨崩了")
 	}
-	if prog.Stage >= len(domain.DefaultPolish.Multipliers)-1 {
+	if prog.Stage >= domain.PolishMaxStage {
 		return errors.New("已到顶")
 	}
-	ps := &domain.PolishState{Stage: prog.Stage, Alive: prog.Alive}
-	alive, brokeAt := ps.AdvanceStone(st, domain.RandSource, prog.BreakMod)
-	if err := a.Store.SavePolishProgress(st.ID, uid, ps.Stage, ps.Alive, prog.BreakMod); err != nil {
+	ps := &domain.PolishState{Stage: prog.Stage, Force: prog.Force, Alive: prog.Alive}
+	alive, brokeAt := ps.Advance(st, domain.RandSource, prog.BreakMod)
+	if err := a.Store.SavePolishProgress(st.ID, uid, ps.Stage, ps.Alive, prog.BreakMod, prog.Force); err != nil {
 		return err
 	}
 	resp := map[string]any{
 		"stage":      ps.Stage,
-		"multiplier": domain.DefaultPolish.Multipliers[ps.Stage],
+		"multiplier": domain.PolishMultiplier(st, ps.Stage),
 		"alive":      alive,
 		"broke_at":   brokeAt,
-		"feel":       domain.PolishFeel(st, ps.Stage),
-		"break_prob": ps.BreakProbAt(st, prog.BreakMod),
+		"feel":       domain.PolishFeel(st, ps.Force),
+		"break_prob": domain.PolishBreakProb(st, ps.Force, prog.BreakMod),
 		"quality":    st.Quality.Name(),
 		"variety":    st.Variety.Name(),
+		"force":      ps.Force,
+		"force_name": domain.PolishForceName(ps.Force),
+		"at_top":     ps.Stage >= domain.PolishMaxStage,
 	}
 	if !alive {
 		// 磨崩: stone destroyed. Insurance refunds 50% of base.
@@ -144,8 +157,8 @@ func (a *API) polishCash(w http.ResponseWriter, r *http.Request) error {
 	if err != nil || prog == nil || !prog.Alive {
 		return errors.New("polish session invalid")
 	}
-	ps := &domain.PolishState{Stage: prog.Stage, Alive: prog.Alive}
-	payout := ps.CashPayout(st.BaseValue())
+	ps := &domain.PolishState{Stage: prog.Stage, Force: prog.Force, Alive: prog.Alive}
+	payout := ps.CashPayout(st, st.BaseValue())
 	var bal int
 	var firstScore int
 	var isNew bool
@@ -168,8 +181,11 @@ func (a *API) polishCash(w http.ResponseWriter, r *http.Request) error {
 	}
 	writeJSON(w, 200, map[string]any{
 		"payout": payout, "chips": bal, "stage": prog.Stage,
-		"quality": st.Quality.Name(), "variety": st.Variety.Name(),
+		"multiplier":      domain.PolishMultiplier(st, prog.Stage),
+		"quality":         st.Quality.Name(),
+		"variety":         st.Variety.Name(),
 		"first_discovery": isNew, "collection_gain": firstScore,
+		"force": prog.Force, "force_name": domain.PolishForceName(prog.Force),
 	})
 	return nil
 }

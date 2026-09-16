@@ -217,7 +217,7 @@ func TestPolishFlow(t *testing.T) {
 	stoneID := items[0].(map[string]any)["id"].(string)
 	c.do("POST", "/api/shop/buy", map[string]string{"stone_id": stoneID})
 
-	start := c.do("POST", "/api/polish/start", map[string]string{"stone_id": stoneID})
+	start := c.do("POST", "/api/polish/start", map[string]any{"force": 2, "stone_id": stoneID})
 	if start["alive"] != true {
 		t.Fatalf("polish start: %v", start)
 	}

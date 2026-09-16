@@ -57,7 +57,7 @@ for cell in range(12):
 shop = call('GET', '/api/shop')
 item3 = shop['grades'][0]['items'][0]
 call('POST', '/api/shop/buy', {'stone_id': item3['id']})
-call('POST', '/api/polish/start', {'stone_id': item3['id']})
+call('POST', '/api/polish/start', {'stone_id': item3['id'], 'force': 2})
 for i in range(10):
     rr = call('POST', '/api/polish/advance', {'stone_id': item3['id']})
     if not rr['alive']:

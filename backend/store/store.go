@@ -167,6 +167,11 @@ func (s *Store) migrate() error {
 		!strings.Contains(err.Error(), "duplicate column") {
 		return fmt.Errorf("migrate relief_at: %w", err)
 	}
+
+	if _, err := s.db.Exec(`ALTER TABLE polish_progress ADD COLUMN force INTEGER NOT NULL DEFAULT 2`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column") {
+		return fmt.Errorf("migrate polish force: %w", err)
+	}
 	return nil
 }
 

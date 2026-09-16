@@ -126,13 +126,14 @@ type PolishProgress struct {
 	Stage    int
 	Alive    bool
 	BreakMod float64
+	Force    int // 力度 chosen before the wheel started; fixed for the run
 }
 
 func (s *Store) GetPolishProgress(stoneID string) (*PolishProgress, error) {
-	row := s.db.QueryRow(`SELECT stone_id, user_id, stage, alive, break_mod FROM polish_progress WHERE stone_id=?`, stoneID)
+	row := s.db.QueryRow(`SELECT stone_id, user_id, stage, alive, break_mod, force FROM polish_progress WHERE stone_id=?`, stoneID)
 	var p PolishProgress
 	var alive int
-	err := row.Scan(&p.StoneID, &p.UserID, &p.Stage, &alive, &p.BreakMod)
+	err := row.Scan(&p.StoneID, &p.UserID, &p.Stage, &alive, &p.BreakMod, &p.Force)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -140,13 +141,17 @@ func (s *Store) GetPolishProgress(stoneID string) (*PolishProgress, error) {
 		return nil, err
 	}
 	p.Alive = alive == 1
+	if p.Force == 0 {
+		p.Force = domain.PolishForceNormal
+	}
 	return &p, nil
 }
 
-func (s *Store) SavePolishProgress(stoneID string, userID, stage int, alive bool, breakMod float64) error {
-	_, err := s.db.Exec(`INSERT INTO polish_progress (stone_id, user_id, stage, alive, break_mod)
-		VALUES (?,?,?,?,?)
-		ON CONFLICT(stone_id) DO UPDATE SET stage=excluded.stage, alive=excluded.alive, break_mod=excluded.break_mod`,
-		stoneID, userID, stage, b2i(alive), breakMod)
+func (s *Store) SavePolishProgress(stoneID string, userID, stage int, alive bool, breakMod float64, force int) error {
+	_, err := s.db.Exec(`INSERT INTO polish_progress (stone_id, user_id, stage, alive, break_mod, force)
+		VALUES (?,?,?,?,?,?)
+		ON CONFLICT(stone_id) DO UPDATE SET stage=excluded.stage, alive=excluded.alive,
+			break_mod=excluded.break_mod, force=excluded.force`,
+		stoneID, userID, stage, b2i(alive), breakMod, force)
 	return err
 }

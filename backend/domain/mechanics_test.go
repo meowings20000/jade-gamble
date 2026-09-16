@@ -5,120 +5,143 @@ import (
 	"testing"
 )
 
-// Polish ladder v2: the rung shape is fixed, but each stone bends it.
-func TestPolishLadder(t *testing.T) {
-	if len(DefaultPolish.Multipliers) != len(DefaultPolish.BreakProbs)+1 {
-		t.Fatalf("ladder shape: %d mults vs %d breaks",
-			len(DefaultPolish.Multipliers), len(DefaultPolish.BreakProbs))
+// 磨石 v3: 種水在你買下石頭那刻就定死了，所以「該怎麼磨」也定死了。
+// 玩家要選對力度；選錯，每一層都在賭命。
+func TestPolishForceMatchesTheStone(t *testing.T) {
+	cases := []struct {
+		q      Quality
+		cracks int
+		deep   bool
+		want   int
+	}{
+		{Glass, 0, false, PolishForceHeavy},
+		{Icy, 0, false, PolishForceHeavy},
+		{OilGreen, 0, false, PolishForceNormal},
+		{Bean, 0, false, PolishForceNormal},
+		{Brick, 0, false, PolishForceLight},
+		{Glass, 2, false, PolishForceNormal}, // 兩條裂 → 只能正磨
+		{Icy, 3, true, PolishForceLight},     // 裂多又深 → 只敢輕手
+		{Brick, 1, true, PolishForceLight},   // 已經最輕
 	}
-	if DefaultPolish.Multipliers[0] >= 1.0 {
-		t.Errorf("starting the wheel must cost something: MULT[0]=%.3f", DefaultPolish.Multipliers[0])
-	}
-	// every rung must be breakable (no free lunch on the way up)
-	for i, brk := range DefaultPolish.BreakProbs {
-		if brk <= 0 {
-			t.Errorf("rung %d has zero break chance", i)
+	for _, c := range cases {
+		st := &Stone{Quality: c.q, CrackCells: make([]int, c.cracks), CracksDeep: c.deep}
+		if got := PolishIdealForce(st); got != c.want {
+			t.Errorf("%s cracks=%d deep=%v: ideal force %d, want %d",
+				c.q.Name(), c.cracks, c.deep, got, c.want)
 		}
 	}
-	r := NewDetRand(5)
-	broke := 0
-	for i := 0; i < 50_000; i++ {
-		p2 := NewPolishState()
-		for {
-			alive, _ := p2.AdvanceStone(nil, r, 0)
-			if !alive {
-				broke++
-				break
-			}
-			if p2.Stage == len(DefaultPolish.Multipliers)-1 {
-				break
-			}
+
+	// 配對的力度必須最安全，每差一級固定 +18%
+	st := &Stone{Quality: Icy}
+	matched := PolishBreakProb(st, PolishIdealForce(st), 0)
+	for _, f := range []int{PolishForceLight, PolishForceNormal, PolishForceHeavy} {
+		if p := PolishBreakProb(st, f, 0); p < matched-1e-9 {
+			t.Errorf("force %d safer than matched (%.4f < %.4f)", f, p, matched)
 		}
 	}
-	if broke == 0 {
-		t.Error("no breaks in 50k runs")
+	if d := PolishBreakProb(st, PolishIdealForce(st)+1, 0) - matched; d < PolishMismatch-1e-9 {
+		t.Errorf("mismatch penalty %.4f, want >= %.4f", d, PolishMismatch)
 	}
-	// buff reduces break prob
-	noBuff := NewPolishState().BreakProbAt(nil, 0)
-	withBuff := NewPolishState().BreakProbAt(nil, 0.08)
-	if withBuff >= noBuff {
-		t.Errorf("磨石手感 buff must lower the break chance: %.4f vs %.4f", withBuff, noBuff)
+
+	// 種水決定耐磨度與天花板
+	if PolishBaseBreakFor(&Stone{Quality: Glass}) >= PolishBaseBreakFor(&Stone{Quality: Brick}) {
+		t.Error("玻璃種應該比磚頭料耐磨")
+	}
+	if PolishCeilingFor(&Stone{Quality: Glass}) <= PolishCeilingFor(&Stone{Quality: Brick}) {
+		t.Error("玻璃種的天花板應該更高")
+	}
+	if PolishMultiplier(&Stone{Quality: Brick}, PolishMaxStage) != PolishCeilingFor(&Stone{Quality: Brick}) {
+		t.Error("倍率必須被種水天花板截住")
+	}
+	if PolishMultiplier(&Stone{Quality: Icy}, 0) >= 1.0 {
+		t.Error("開磨就該損耗")
+	}
+
+	// 手感必須誠實反映配不配
+	if PolishFeel(st, PolishIdealForce(st)) == PolishFeel(st, PolishIdealForce(st)-1) {
+		t.Error("手感必須區分配對與不配對")
 	}
 }
 
-// Stones must bend the ladder: 種水 endures, cracks (especially deep) split.
-func TestPolishReadsTheStone(t *testing.T) {
-	clean := &Stone{ID: "S_a", Price: 1000, Quality: Glass, Variety: Base}
-	cracked := &Stone{ID: "S_b", Price: 1000, Quality: Brick, Variety: Base,
-		CrackCells: []int{1, 4, 9}, CracksDeep: true}
-	pg := NewPolishState()
-	pb := NewPolishState()
-	if pg.BreakProbAt(clean, 0) >= pg.BreakProbAt(cracked, 0) {
-		t.Errorf("flawed stone must be riskier: glass/clean %.4f vs brick/cracked %.4f",
-			pg.BreakProbAt(clean, 0), pb.BreakProbAt(cracked, 0))
-	}
-	if d := PolishRiskDelta(cracked) - PolishRiskDelta(clean); d < 0.15 {
-		t.Errorf("risk gap too small to matter: %.4f", d)
-	}
-	// quality relief must be monotone
-	prev := 1.0
-	for _, q := range []Quality{Brick, Bean, OilGreen, Icy, Glass} {
-		d := PolishRiskDelta(&Stone{Quality: q})
-		if d > prev+1e-9 {
-			t.Errorf("%s risk rose instead of falling: %.4f", q.Name(), d)
+// Economics: 好料配對力度值得磨、爛料不值得、選錯重罰、加權後莊家有邊際.
+func TestPolishForceEconomics(t *testing.T) {
+	bestFor := func(st *Stone) float64 {
+		best := 0.0
+		for _, f := range []int{PolishForceLight, PolishForceNormal, PolishForceHeavy} {
+			p := PolishBreakProb(st, f, 0)
+			v := PolishMultiplier(st, PolishMaxStage)
+			for s := PolishMaxStage - 1; s >= 0; s-- {
+				if c := (1 - p) * v; c > PolishMultiplier(st, s) {
+					v = c
+				} else {
+					v = PolishMultiplier(st, s)
+				}
+			}
+			if v > best {
+				best = v
+			}
 		}
-		prev = d
+		return best
 	}
-	// the feel line must distinguish 種水 even before sharpening
-	if PolishFeel(clean, 2) == PolishFeel(cracked, 2) {
-		t.Error("feel lines must differ by quality")
-	}
-}
+	glass := bestFor(&Stone{Quality: Glass, Price: 1000})
+	icy := bestFor(&Stone{Quality: Icy, Price: 1000})
+	brickClean := bestFor(&Stone{Quality: Brick, Price: 1000})
+	crackedBrick := bestFor(&Stone{Quality: Brick, Price: 1000,
+		CrackCells: []int{1, 4, 9}, CracksDeep: true})
 
-// The whole point: a player who knows the stone cannot beat cutting by much,
-// and an ignorant player loses. Weighted over the KiloGrade quality spread
-// the ladder must stay under 1.0 (house edge), while 冰種/玻璃種 are worth
-// polishing (>1.0) — that gap IS the appraisal skill.
-func TestPolishLadderV2Economics(t *testing.T) {
-	best := func(st *Stone) float64 {
-		p := &PolishState{Alive: true}
-		rungs := len(DefaultPolish.Multipliers)
-		// backward induction: V[i] = max(M[i], (1-p_i)·V[i+1])
-		v := DefaultPolish.Multipliers[rungs-1]
-		for i := rungs - 2; i >= 0; i-- {
-			p.Stage = i
-			pi := p.BreakProbAt(st, 0)
-			cont := (1 - pi) * v
-			if cont > DefaultPolish.Multipliers[i] {
-				v = cont
+	if glass <= 1.05 {
+		t.Errorf("玻璃種配對力度應該明顯值得磨: V0=%.4f", glass)
+	}
+	if icy <= 1.0 {
+		t.Errorf("冰種應該值得磨: V0=%.4f", icy)
+	}
+	if crackedBrick >= 1.0 {
+		t.Errorf("裂磚頭料不該有利可圖: V0=%.4f", crackedBrick)
+	}
+	if glass-brickClean < 0.25 {
+		t.Errorf("種水好壞沒有拉開差距: glass=%.4f brick=%.4f", glass, brickClean)
+	}
+
+	// 選錯力度必須明顯更差 —— 這就是「讀懂石頭」的價值
+	st := &Stone{Quality: Icy, Price: 1000}
+	matched := bestFor(st)
+	wrong := 0.0
+	for _, f := range []int{PolishForceLight, PolishForceNormal} {
+		p := PolishBreakProb(st, f, 0)
+		v := PolishMultiplier(st, PolishMaxStage)
+		for s := PolishMaxStage - 1; s >= 0; s-- {
+			if c := (1 - p) * v; c > PolishMultiplier(st, s) {
+				v = c
 			} else {
-				v = DefaultPolish.Multipliers[i]
+				v = PolishMultiplier(st, s)
 			}
 		}
-		return v
+		if v > wrong {
+			wrong = v
+		}
 	}
+	if matched-wrong < 0.10 {
+		t.Errorf("選錯力度代價太小: matched=%.4f wrong=%.4f", matched, wrong)
+	}
+
+	// 加權（玩家靠打燈＋皮殼判斷，讀對率 60~90%）都必須 < 1
 	spread := []struct {
 		q Quality
-		p float64 // KiloGrade distribution
-	}{
-		{Brick, 0.08}, {Bean, 0.32}, {OilGreen, 0.42}, {Icy, 0.17}, {Glass, 0.01},
-	}
-	weighted := 0.0
+		p float64
+	}{{Brick, 0.08}, {Bean, 0.32}, {OilGreen, 0.42}, {Icy, 0.17}, {Glass, 0.01}}
+	informed := 0.0
 	for _, s := range spread {
-		weighted += s.p * best(&Stone{Quality: s.q, Price: 1000})
+		informed += s.p * bestFor(&Stone{Quality: s.q, Price: 1000})
 	}
-	if weighted > 0.995 {
-		t.Errorf("informed player beats cutting: weighted V0=%.4f", weighted)
+	for _, acc := range []float64{0.6, 0.7, 0.8, 0.9} {
+		ev := acc*informed + (1-acc)*PolishStartMult
+		if ev > 0.995 {
+			t.Errorf("讀對率 %.0f%%：玩家有利可圖 EV=%.4f", acc*100, ev)
+		}
 	}
-	if weighted < 0.94 {
-		t.Errorf("polish is a trap even for good stones: weighted V0=%.4f", weighted)
-	}
-	// good stones must be worth polishing, bad ones must not
-	if v := best(&Stone{Quality: Icy, Price: 1000}); v <= 1.0 {
-		t.Errorf("冰種 should be worth polishing, V0=%.4f", v)
-	}
-	if v := best(&Stone{Quality: Brick, Price: 1000, CrackCells: []int{2, 5}, CracksDeep: true}); v >= 1.0 {
-		t.Errorf("裂磚頭料 must not be profitable, V0=%.4f", v)
+	// 但不該懲罰到沒人想玩
+	if ev := 0.8*informed + 0.2*PolishStartMult; ev < 0.95 {
+		t.Errorf("磨石連好料都賺不回來: EV=%.4f", ev)
 	}
 }
 

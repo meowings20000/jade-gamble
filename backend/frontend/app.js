@@ -412,36 +412,66 @@ function varietyKey(name) {
 
 // ---------- polish ----------
 async function doPolish(st) {
-  const res = await api('POST', '/api/polish/start', { stone_id: st.id });
+  // 開磨前先選力度——種水已經定死，力度配不上就每層賭命。
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg';
+  const m = document.createElement('div');
+  m.className = 'modal';
+  const pick = (force, name, desc) => `
+    <button class="btn ghost" data-force="${force}" style="display:block;width:100%;text-align:left;margin-bottom:8px">
+      <b>${name}</b><br><span style="font-size:12px;color:var(--muted)">${desc}</span>
+    </button>`;
+  m.innerHTML = `
+    <h3>磨石 — 選力度</h3>
+    <p style="font-size:13px;color:var(--muted);line-height:1.6">
+      這顆料的種水在你買下它時就定死了，<b>該用多大力度也跟著定死了</b>。<br>
+      力度配得上，機器順暢一路上去；配不上，每一層都在賭命。<br>
+      打法燈報告和皮殼表現猜猜看——選了就不能換。</p>
+    ${pick(1, '輕磨 ×0.93 起', '最保險，但磨得慢、天花板低。有裂的料只能這樣磨。')}
+    ${pick(2, '正磨 ×0.93 起', '標準力度。一般料吃得住。')}
+    ${pick(3, '重磨 ×0.93 起', '吃得下重壓的只有好種水。壓不住就崩。')}
+    <div class="row" style="margin-top:6px"><button class="btn ghost" id="pol-cancel">離開</button></div>`;
+  bg.appendChild(m);
+  document.body.appendChild(bg);
+  m.querySelector('#pol-cancel').addEventListener('click', () => bg.remove());
+  m.querySelectorAll('[data-force]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      bg.remove();
+      startPolish(st, Number(btn.dataset.force));
+    });
+  });
+}
+
+async function startPolish(st, force) {
+  const res = await api('POST', '/api/polish/start', { stone_id: st.id, force });
   const bg = document.createElement('div');
   bg.className = 'modal-bg';
   const m = document.createElement('div');
   m.className = 'modal';
   const pct = (p) => (p * 100).toFixed(1) + '%';
   m.innerHTML = `
-    <h3>磨石 <span style="font-size:12px;color:var(--muted)">皮殼一寸寸磨掉</span></h3>
-    <div class="big-result" id="pol-mult">×${res.multiplier}</div>
+    <h3>磨石 — ${res.force_name} <span style="font-size:12px;color:var(--muted)">皮殼一寸寸磨掉</span></h3>
+    <div class="big-result" id="pol-mult">×${Number(res.multiplier).toFixed(2)}</div>
     <div class="ladder" id="pol-ladder"></div>
-    <div class="kv"><span>下一層磨崩機率</span><b id="pol-risk">${pct(res.break_prob)}</b></div>
-    <div class="kv"><span>這顆料的風險</span><b id="pol-delta">${(res.risk_delta > 0 ? '+' : '') + pct(res.risk_delta)}</b></div>
+    <div class="kv"><span>下一層爆裂機率</span><b id="pol-risk">${pct(res.break_prob)}</b></div>
     <p id="pol-feel" style="font-size:13px;color:var(--gold);margin:10px 0;line-height:1.6">👁 ${res.feel}</p>
     <p style="font-size:12px;color:var(--muted);margin:8px 0">
-      開磨即損 7% 皮殼價（×0.93 起）。每磨一層倍率上升、爆裂風險也上升，磨崩則整顆沒收。
-      <b>有裂的石頭一磨就崩，好種水才撐得住</b>——每磨一層都會告訴你手感，隨時可以落袋。</p>
+      開磨即損 7% 皮殼價。力度配得上就磨得順，配不上每層都在賭命——
+      <b>手感會告訴你配不配</b>，隨時可以落袋。</p>
     <div class="row" style="margin-top:10px">
       <button class="btn" id="pol-adv">再磨一層</button>
-      <button class="btn danger" id="pol-cash">落袋 ×${res.multiplier}</button>
+      <button class="btn danger" id="pol-cash">落袋 ×${Number(res.multiplier).toFixed(2)}</button>
       <button class="btn ghost" id="pol-close">離開</button>
     </div>`;
   bg.appendChild(m);
   document.body.appendChild(bg);
   const ladder = m.querySelector('#pol-ladder');
-  const paintLadder = (cur) => {
+  const paintLadder = (stage) => {
     ladder.innerHTML = '';
-    for (const [i, v] of (res.ladder || []).entries()) {
+    for (let i = 0; i <= 10; i++) {
       const el = document.createElement('span');
-      el.className = 'rung' + (i < cur ? ' past' : '') + (i === cur ? ' cur' : '');
-      el.textContent = '×' + v;
+      el.className = 'rung' + (i < stage ? ' past' : '') + (i === stage ? ' cur' : '');
+      el.textContent = '×' + (0.93 * Math.pow(1.2, i) > res.ladder.top ? res.ladder.top : (0.93 * Math.pow(1.2, i)).toFixed(2));
       ladder.appendChild(el);
     }
   };
@@ -450,14 +480,15 @@ async function doPolish(st) {
     try {
       const rr = await api('POST', '/api/polish/advance', { stone_id: st.id });
       if (rr.alive) {
-        m.querySelector('#pol-mult').textContent = '×' + rr.multiplier;
-        m.querySelector('#pol-cash').textContent = '落袋 ×' + rr.multiplier;
+        m.querySelector('#pol-mult').textContent = '×' + Number(rr.multiplier).toFixed(2);
+        m.querySelector('#pol-cash').textContent = '落袋 ×' + Number(rr.multiplier).toFixed(2);
         m.querySelector('#pol-risk').textContent = pct(rr.break_prob);
         m.querySelector('#pol-feel').textContent = '👁 ' + rr.feel;
         paintLadder(rr.stage);
+        if (rr.at_top) m.querySelector('#pol-adv').disabled = true;
       } else {
         bg.remove();
-        showResultModal('磨石', { ...rr, payout: 0, quality: '已碎', variety: '-', multiplier: rr.multiplier || 0 }, st);
+        showResultModal('磨石', { ...rr, payout: 0, quality: '已碎', variety: '-', multiplier: Number(rr.multiplier).toFixed(2) }, st);
         loadWarehouse(); refreshMe();
       }
     } catch (e) { toast(e.message); }
