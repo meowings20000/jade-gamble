@@ -5,41 +5,121 @@ import (
 	"testing"
 )
 
-// Polish ladder: per-step EV decay ~3%, cash multipliers as published.
+// Polish ladder v2: the rung shape is fixed, but each stone bends it.
 func TestPolishLadder(t *testing.T) {
+	if len(DefaultPolish.Multipliers) != len(DefaultPolish.BreakProbs)+1 {
+		t.Fatalf("ladder shape: %d mults vs %d breaks",
+			len(DefaultPolish.Multipliers), len(DefaultPolish.BreakProbs))
+	}
+	if DefaultPolish.Multipliers[0] >= 1.0 {
+		t.Errorf("starting the wheel must cost something: MULT[0]=%.3f", DefaultPolish.Multipliers[0])
+	}
+	// every rung must be breakable (no free lunch on the way up)
 	for i, brk := range DefaultPolish.BreakProbs {
-		next := DefaultPolish.Multipliers[i+1]
-		cur := DefaultPolish.Multipliers[i]
-		evRatio := (next * (1 - brk)) / cur
-		if math.Abs(evRatio-0.97) > 0.012 {
-			t.Errorf("rung %d: EV ratio %.4f, want ~0.97", i, evRatio)
+		if brk <= 0 {
+			t.Errorf("rung %d has zero break chance", i)
 		}
 	}
 	r := NewDetRand(5)
 	broke := 0
-	for i := 0; i < 100_000; i++ {
+	for i := 0; i < 50_000; i++ {
 		p2 := NewPolishState()
 		for {
-			alive, _ := p2.Advance(r, 0)
+			alive, _ := p2.AdvanceStone(nil, r, 0)
 			if !alive {
 				broke++
 				break
 			}
-			if p2.Stage == 10 {
+			if p2.Stage == len(DefaultPolish.Multipliers)-1 {
 				break
 			}
 		}
 	}
 	if broke == 0 {
-		t.Error("no breaks in 100k runs")
+		t.Error("no breaks in 50k runs")
 	}
 	// buff reduces break prob
-	p3 := NewPolishState()
-	alive := true
-	for p3.Stage < 3 {
-		alive, _ = p3.Advance(r, 0.08)
+	noBuff := NewPolishState().BreakProbAt(nil, 0)
+	withBuff := NewPolishState().BreakProbAt(nil, 0.08)
+	if withBuff >= noBuff {
+		t.Errorf("磨石手感 buff must lower the break chance: %.4f vs %.4f", withBuff, noBuff)
 	}
-	_ = alive
+}
+
+// Stones must bend the ladder: 種水 endures, cracks (especially deep) split.
+func TestPolishReadsTheStone(t *testing.T) {
+	clean := &Stone{ID: "S_a", Price: 1000, Quality: Glass, Variety: Base}
+	cracked := &Stone{ID: "S_b", Price: 1000, Quality: Brick, Variety: Base,
+		CrackCells: []int{1, 4, 9}, CracksDeep: true}
+	pg := NewPolishState()
+	pb := NewPolishState()
+	if pg.BreakProbAt(clean, 0) >= pg.BreakProbAt(cracked, 0) {
+		t.Errorf("flawed stone must be riskier: glass/clean %.4f vs brick/cracked %.4f",
+			pg.BreakProbAt(clean, 0), pb.BreakProbAt(cracked, 0))
+	}
+	if d := PolishRiskDelta(cracked) - PolishRiskDelta(clean); d < 0.15 {
+		t.Errorf("risk gap too small to matter: %.4f", d)
+	}
+	// quality relief must be monotone
+	prev := 1.0
+	for _, q := range []Quality{Brick, Bean, OilGreen, Icy, Glass} {
+		d := PolishRiskDelta(&Stone{Quality: q})
+		if d > prev+1e-9 {
+			t.Errorf("%s risk rose instead of falling: %.4f", q.Name(), d)
+		}
+		prev = d
+	}
+	// the feel line must distinguish 種水 even before sharpening
+	if PolishFeel(clean, 2) == PolishFeel(cracked, 2) {
+		t.Error("feel lines must differ by quality")
+	}
+}
+
+// The whole point: a player who knows the stone cannot beat cutting by much,
+// and an ignorant player loses. Weighted over the KiloGrade quality spread
+// the ladder must stay under 1.0 (house edge), while 冰種/玻璃種 are worth
+// polishing (>1.0) — that gap IS the appraisal skill.
+func TestPolishLadderV2Economics(t *testing.T) {
+	best := func(st *Stone) float64 {
+		p := &PolishState{Alive: true}
+		rungs := len(DefaultPolish.Multipliers)
+		// backward induction: V[i] = max(M[i], (1-p_i)·V[i+1])
+		v := DefaultPolish.Multipliers[rungs-1]
+		for i := rungs - 2; i >= 0; i-- {
+			p.Stage = i
+			pi := p.BreakProbAt(st, 0)
+			cont := (1 - pi) * v
+			if cont > DefaultPolish.Multipliers[i] {
+				v = cont
+			} else {
+				v = DefaultPolish.Multipliers[i]
+			}
+		}
+		return v
+	}
+	spread := []struct {
+		q Quality
+		p float64 // KiloGrade distribution
+	}{
+		{Brick, 0.08}, {Bean, 0.32}, {OilGreen, 0.42}, {Icy, 0.17}, {Glass, 0.01},
+	}
+	weighted := 0.0
+	for _, s := range spread {
+		weighted += s.p * best(&Stone{Quality: s.q, Price: 1000})
+	}
+	if weighted > 0.995 {
+		t.Errorf("informed player beats cutting: weighted V0=%.4f", weighted)
+	}
+	if weighted < 0.94 {
+		t.Errorf("polish is a trap even for good stones: weighted V0=%.4f", weighted)
+	}
+	// good stones must be worth polishing, bad ones must not
+	if v := best(&Stone{Quality: Icy, Price: 1000}); v <= 1.0 {
+		t.Errorf("冰種 should be worth polishing, V0=%.4f", v)
+	}
+	if v := best(&Stone{Quality: Brick, Price: 1000, CrackCells: []int{2, 5}, CracksDeep: true}); v >= 1.0 {
+		t.Errorf("裂磚頭料 must not be profitable, V0=%.4f", v)
+	}
 }
 
 // Scratch: EV per cell, crack penalty, sell-now fee, full bonus.

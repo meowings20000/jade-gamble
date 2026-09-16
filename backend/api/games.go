@@ -42,10 +42,14 @@ func (a *API) polishStart(w http.ResponseWriter, r *http.Request) error {
 		}
 		prog, _ = a.Store.GetPolishProgress(st.ID)
 	}
+	ps := &domain.PolishState{Stage: prog.Stage, Alive: prog.Alive}
 	writeJSON(w, 200, map[string]any{
 		"stone_id": st.ID, "seed": seedStr(st.Seed),
 		"stage": prog.Stage, "multiplier": domain.DefaultPolish.Multipliers[prog.Stage],
 		"ladder": domain.DefaultPolish.Multipliers, "alive": prog.Alive,
+		"break_prob": ps.BreakProbAt(st, prog.BreakMod),
+		"feel":       domain.PolishFeel(st, prog.Stage),
+		"risk_delta": domain.PolishRiskDelta(st),
 	})
 	return nil
 }
@@ -76,7 +80,7 @@ func (a *API) polishAdvance(w http.ResponseWriter, r *http.Request) error {
 		return errors.New("已到顶")
 	}
 	ps := &domain.PolishState{Stage: prog.Stage, Alive: prog.Alive}
-	alive, brokeAt := ps.Advance(domain.RandSource, prog.BreakMod)
+	alive, brokeAt := ps.AdvanceStone(st, domain.RandSource, prog.BreakMod)
 	if err := a.Store.SavePolishProgress(st.ID, uid, ps.Stage, ps.Alive, prog.BreakMod); err != nil {
 		return err
 	}
@@ -84,6 +88,11 @@ func (a *API) polishAdvance(w http.ResponseWriter, r *http.Request) error {
 		"stage":      ps.Stage,
 		"multiplier": domain.DefaultPolish.Multipliers[ps.Stage],
 		"alive":      alive,
+		"broke_at":   brokeAt,
+		"feel":       domain.PolishFeel(st, ps.Stage),
+		"break_prob": ps.BreakProbAt(st, prog.BreakMod),
+		"quality":    st.Quality.Name(),
+		"variety":    st.Variety.Name(),
 	}
 	if !alive {
 		// 磨崩: stone destroyed. Insurance refunds 50% of base.

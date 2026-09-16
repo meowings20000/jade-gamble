@@ -417,11 +417,17 @@ async function doPolish(st) {
   bg.className = 'modal-bg';
   const m = document.createElement('div');
   m.className = 'modal';
+  const pct = (p) => (p * 100).toFixed(1) + '%';
   m.innerHTML = `
-    <h3>磨石 <span style="font-size:12px;color:var(--muted)">crash 模式</span></h3>
+    <h3>磨石 <span style="font-size:12px;color:var(--muted)">皮殼一寸寸磨掉</span></h3>
     <div class="big-result" id="pol-mult">×${res.multiplier}</div>
     <div class="ladder" id="pol-ladder"></div>
-    <p style="font-size:12px;color:var(--muted);margin:8px 0">每磨一層倍率上升，但磨崩 = 石頭沒收。隨時可落袋。</p>
+    <div class="kv"><span>下一層磨崩機率</span><b id="pol-risk">${pct(res.break_prob)}</b></div>
+    <div class="kv"><span>這顆料的風險</span><b id="pol-delta">${(res.risk_delta > 0 ? '+' : '') + pct(res.risk_delta)}</b></div>
+    <p id="pol-feel" style="font-size:13px;color:var(--gold);margin:10px 0;line-height:1.6">👁 ${res.feel}</p>
+    <p style="font-size:12px;color:var(--muted);margin:8px 0">
+      開磨即損 7% 皮殼價（×0.93 起）。每磨一層倍率上升、爆裂風險也上升，磨崩則整顆沒收。
+      <b>有裂的石頭一磨就崩，好種水才撐得住</b>——每磨一層都會告訴你手感，隨時可以落袋。</p>
     <div class="row" style="margin-top:10px">
       <button class="btn" id="pol-adv">再磨一層</button>
       <button class="btn danger" id="pol-cash">落袋 ×${res.multiplier}</button>
@@ -432,12 +438,12 @@ async function doPolish(st) {
   const ladder = m.querySelector('#pol-ladder');
   const paintLadder = (cur) => {
     ladder.innerHTML = '';
-    (res.ladder || [1, 1.15, 1.35, 1.6, 1.9, 2.3, 2.8, 3.5, 4.5, 6, 8]).forEach((v, i) => {
+    for (const [i, v] of (res.ladder || []).entries()) {
       const el = document.createElement('span');
       el.className = 'rung' + (i < cur ? ' past' : '') + (i === cur ? ' cur' : '');
       el.textContent = '×' + v;
       ladder.appendChild(el);
-    });
+    }
   };
   paintLadder(res.stage);
   m.querySelector('#pol-adv').addEventListener('click', async () => {
@@ -446,6 +452,8 @@ async function doPolish(st) {
       if (rr.alive) {
         m.querySelector('#pol-mult').textContent = '×' + rr.multiplier;
         m.querySelector('#pol-cash').textContent = '落袋 ×' + rr.multiplier;
+        m.querySelector('#pol-risk').textContent = pct(rr.break_prob);
+        m.querySelector('#pol-feel').textContent = '👁 ' + rr.feel;
         paintLadder(rr.stage);
       } else {
         bg.remove();
