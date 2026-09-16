@@ -107,7 +107,10 @@ function renderHeist(d) {
             ${!s.mine && s.alive && !done ? `<div style="margin-top:4px"><button type="button" onclick="heistAct('betray',${s.user_id})" style="font-size:12px;padding:4px 8px">🔪 背叛他</button></div>` : ''}
           </div>`).join('')}
       </div>
-      ${(done || h.status === 'open') ? `<div style="margin-top:12px"><button type="button" onclick="heistLeave()" class="hbtn hbtn-ghost hbtn-pill">🚪 ${done ? '離開桌子' : '退出排隊（退還入場費）'}</button></div>` : `
+      ${(done || h.status === 'open') ? `<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        ${h.status === 'open' ? `<button type="button" onclick="heistFill()" class="hbtn hbtn-pill">🎲 直接開局（補 bot）</button>` : ''}
+        <button type="button" onclick="heistLeave()" class="hbtn hbtn-ghost hbtn-pill">🚪 ${done ? '離開桌子' : '退出排隊（退還入場費）'}</button>
+      </div>` : `
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
         ${h.status === 'open' ? `<button type="button" onclick="heistFill()" class="hbtn hbtn-pill">🎲 直接開局（補 bot）</button>` : ''}
         <button type="button" onclick="heistAct('cooperate',0)" class="hbtn hbtn-coop hbtn-pill">🤝 合作（推進度）</button>
