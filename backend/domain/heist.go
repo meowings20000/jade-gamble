@@ -27,11 +27,17 @@ const (
 	HeistPotMul     = 1.5
 	// HeistBotWaitSec: 沒真人時，等幾秒才自動補 bot（用戶指定 5 分鐘）
 	HeistBotWaitSec = 300
-	// HeistKillChance: 背叛的刺殺成功率（失敗＝對方活下來，而且知道是你動的手）
-	HeistKillChance = 0.70
+	// 背叛三種結果（用戶指定）：60% 刺殺成功／20% 被反殺／20% 無事發生
+	HeistKillChance    = 0.60
+	HeistCounterChance = 0.20
+	HeistNothingChance = 0.20
 	// HeistRoundSec: 一輪幾秒內要出手，逾時自動算「合作」（用戶指定 30 秒）
 	HeistRoundSec = 30 // 獎池 = 4 × 入場費 × 1.5（每人分 1.5× 入場費）
 )
+
+// HeistKillRoll: 一次背叛的命運（0-99）。獨立成可注入的函式，
+// 測試可以固定成「必成功」，且不影響 bot 決策用的亂數。
+var HeistKillRoll = func(r Rand) int { return r.Intn(100) }
 
 const (
 	HeistCooperate = "cooperate"
@@ -147,11 +153,19 @@ func ResolveHeistRound(seats []HeistSeat, progress, target int, r Rand) HeistRou
 			res.Log = append(res.Log, fmt.Sprintf("%s 與 %s 同時背叛，互相抵銷——兩個都沒死", s.Name, victim.Name))
 			continue
 		}
-		if r.Float64() >= HeistKillChance {
-			// 刺殺失敗：對方逃過一劫，但知道是你動的手（已曝光）
-			res.Exposed[victim.UserID] = s.UserID
+		roll := HeistKillRoll(r) // 整數分桶：0-19 被反殺、20-39 無事、40-99 成功
+		if roll < 20 {
+			// 20% 被反殺：動手的人自己死，目標活著並拿走他 70% 入場費
+			res.Deaths[s.UserID] = victim.UserID
+			res.Exposed[s.UserID] = victim.UserID
+			res.Looters[victim.UserID] += int(float64(s.Entry) * HeistKillTake)
 			res.Misses = append(res.Misses, [2]int{s.UserID, victim.UserID})
-			res.Log = append(res.Log, fmt.Sprintf("%s 想殺 %s，但失手了——對方逃過一劫，而且知道是他", s.Name, victim.Name))
+			res.Log = append(res.Log, fmt.Sprintf("%s 想殺 %s，反被對方做掉——%s 拿走他 70%% 入場費", s.Name, victim.Name, victim.Name))
+			continue
+		}
+		if roll < 40 {
+			// 20% 無事發生：沒人死、沒人拿錢
+			res.Log = append(res.Log, fmt.Sprintf("%s 想殺 %s，但沒成——虛驚一場", s.Name, victim.Name))
 			continue
 		}
 		victims[victim.UserID] = append(victims[victim.UserID], s.UserID)

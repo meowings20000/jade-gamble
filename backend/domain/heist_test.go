@@ -32,9 +32,14 @@ func betray(s []HeistSeat, from, target int) {
 // 四人互相合作：+6 格，沒人死。
 // killRand：測試用——Float64 永遠回 0（= 0 < 0.70 → 刺殺必成功），
 // 讓「背叛殺人」的測試不受新的 70% 機率影響。
+func init() {
+	// 測試固定成「刺殺必成功」，避免 60/20/20 機率讓斷言隨機翻車。
+	HeistKillRoll = func(Rand) int { return 90 }
+}
+
 type killRand struct{}
 
-func (killRand) Float64() float64 { return 0 }
+func (killRand) Float64() float64 { return 0.9 }
 func (killRand) Intn(n int) int   { return 0 }
 
 func TestHeistMutualCoop(t *testing.T) {
