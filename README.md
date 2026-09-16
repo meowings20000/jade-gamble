@@ -76,6 +76,7 @@ DISCORD_REDIRECT_URI=http://localhost:3002/api/auth/discord/callback
 - Tunnel：`jade-gamble`（id `1b797080-1a1b-4166-b6c4-d4b9d1fe7630`），**本機管理**（設定檔 `C:\Users\User\.cloudflared\jade-config.yml`）
 - Ingress：`jade.meowmeow12245ouo.dpdns.org` → `http://localhost:3002`
 - 開機自啟：啟動資料夾的 `jade-gamble-tunnel.vbs`（登入時隱藏啟動，不需管理員權限）
+- Cloudflare 會用 403 擋掉 Python-urllib 這類預設 User-Agent（瀏覽器完全正常）；腳本打公網網址要自帶瀏覽器 UA（`scripts/*.py` 已加）。
 - 與 new-api 的 tunnel（`New API TUnnel`，dashboard 管理）完全獨立，互不影響
 
 手動重啟通道：

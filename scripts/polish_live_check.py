@@ -10,6 +10,7 @@ import time
 import urllib.request
 import http.cookiejar
 
+UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
 BASE = 'http://127.0.0.1:3002'
 op = urllib.request.build_opener(
     urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
@@ -18,6 +19,7 @@ op = urllib.request.build_opener(
 def call(method, path, body=None):
     req = urllib.request.Request(BASE + path, method=method)
     req.add_header('Content-Type', 'application/json')
+    req.add_header('User-Agent', UA)
     data = json.dumps(body).encode() if body is not None else None
     try:
         with op.open(req, data) as r:

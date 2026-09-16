@@ -4,6 +4,7 @@ import json
 import urllib.request
 import http.cookiejar
 
+UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
 BASE = 'http://127.0.0.1:3002'
 cj = http.cookiejar.CookieJar()
 opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
@@ -12,6 +13,7 @@ opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
 def call(method, path, body=None):
     req = urllib.request.Request(BASE + path, method=method)
     req.add_header('Content-Type', 'application/json')
+    req.add_header('User-Agent', UA)
     data = json.dumps(body).encode() if body is not None else None
     with opener.open(req, data) as r:
         return json.loads(r.read().decode())
@@ -73,6 +75,7 @@ op2 = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj2))
 def call2(method, path, body=None):
     req = urllib.request.Request(BASE + path, method=method)
     req.add_header('Content-Type', 'application/json')
+    req.add_header('User-Agent', UA)
     data = json.dumps(body).encode() if body is not None else None
     with op2.open(req, data) as r:
         return json.loads(r.read().decode())
@@ -137,6 +140,7 @@ else:
 req = urllib.request.Request(BASE + '/api/auth/mock', method='POST',
                              data=b'{"username":"a"}{"username":"b"}')
 req.add_header('Content-Type', 'application/json')
+    req.add_header('User-Agent', UA)
 try:
     opener.open(req)
     raise SystemExit('✗ trailing JSON accepted!')
