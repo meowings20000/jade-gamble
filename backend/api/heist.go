@@ -126,8 +126,15 @@ func (a *API) heistState(w http.ResponseWriter, r *http.Request) error {
 	if left < 0 || h.Status != "running" {
 		left = 0
 	}
+	fillIn := 0
+	if h.Status == "open" {
+		fillIn = domain.HeistBotWaitSec - int(a.Store.HeistAgeSec(h.ID))
+		if fillIn < 0 {
+			fillIn = 0
+		}
+	}
 	out["heist"] = map[string]any{
-		"round_left": left, "action_sec": domain.HeistRoundSec,
+		"round_left": left, "action_sec": domain.HeistRoundSec, "bot_in": fillIn,
 		"rounds": domain.HeistRoundsFor(domain.ShopGrade(h.Grade)),
 		"id":     h.ID, "grade": h.Grade, "entry": h.Entry, "pot": h.Pot, "progress": h.Progress,
 		"target": h.Target, "round": h.Round, "status": h.Status,

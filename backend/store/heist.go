@@ -126,6 +126,15 @@ func (s *Store) ResetHeistActionsTx(tx *sql.Tx, heistID int) error {
 	return err
 }
 
+// HeistAgeSec: 開桌到現在幾秒（等待中的桌用來看還有多久自動補 bot）。
+func (s *Store) HeistAgeSec(heistID int) float64 {
+	var age sql.NullFloat64
+	if err := s.db.QueryRow(`SELECT (julianday('now') - julianday(created_at)) * 86400.0 FROM heists WHERE id=?`, heistID).Scan(&age); err != nil || !age.Valid {
+		return 0
+	}
+	return age.Float64
+}
+
 // HeistRoundAgeSec: 這一輪開始到現在幾秒（沒記到就當成很久＝該結算了）。
 func (s *Store) HeistRoundAgeSec(heistID int) float64 {
 	var age sql.NullFloat64

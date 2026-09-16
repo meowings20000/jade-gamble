@@ -182,9 +182,23 @@ async function heistSyncChips() {
   } catch (e) { /* 沒登入就算了 */ }
 }
 
+// mm:ss
+function heistMmss(sec) {
+  sec = Math.max(0, Math.round(sec));
+  return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+}
+
 // 行動倒數（一輪 30 秒，沒出手自動算合作）
 function heistCd(h) {
-  if (!h || h.status !== 'running') return '';
+  if (!h) return '';
+  if (h.status === 'open') {
+    const s = Number(h.bot_in !== undefined ? h.bot_in : 300);
+    window.__heistDeadline = Date.now() + Math.max(0, s) * 1000;
+    window.__heistCdMode = 'fill';
+    return '<span id="heist-cd" style="margin-left:10px;font-weight:700;color:#ffd977">\u23f3 自動補 bot ' + heistMmss(s) + '</span>';
+  }
+  if (h.status !== 'running') return '';
+  window.__heistCdMode = 'round';
   const sec = Number(h.round_left !== undefined ? h.round_left : 30);
   window.__heistDeadline = Date.now() + Math.max(0, sec) * 1000;
   return `<span id="heist-cd" style="margin-left:10px;font-weight:700;color:#ffd977">⏳ ${Math.max(0, sec)} 秒</span>`;
@@ -193,6 +207,10 @@ setInterval(() => {
   const el = document.getElementById('heist-cd');
   if (!el || !window.__heistDeadline) return;
   const left = Math.max(0, Math.round((window.__heistDeadline - Date.now()) / 1000));
-  el.textContent = left > 0 ? `⏳ ${left} 秒` : '⏳ 沒出手＝自動合作…';
+  if (window.__heistCdMode === 'fill') {
+    el.textContent = left > 0 ? ('⏳ 自動補 bot ' + heistMmss(left)) : '⏳ 正在補 bot…';
+  } else {
+    el.textContent = left > 0 ? `⏳ ${left} 秒` : '⏳ 沒出手＝自動合作…';
+  }
   el.style.color = left <= 5 ? '#ff8a8a' : '#ffd977';
 }, 1000);
