@@ -27,6 +27,8 @@ const (
 	HeistPotMul     = 1.5
 	// HeistBotWaitSec: 沒真人時，等幾秒才自動補 bot（用戶指定 5 分鐘）
 	HeistBotWaitSec = 300
+	// HeistKillChance: 背叛的刺殺成功率（失敗＝對方活下來，而且知道是你動的手）
+	HeistKillChance = 0.70
 	// HeistRoundSec: 一輪幾秒內要出手，逾時自動算「合作」（用戶指定 30 秒）
 	HeistRoundSec = 30 // 獎池 = 4 × 入場費 × 1.5（每人分 1.5× 入場費）
 )
@@ -73,6 +75,7 @@ type HeistRound struct {
 	Progress   int
 	MutualPair int         // 互相合作的對數
 	Deaths     map[int]int // 死者 → 兇手（0 = 崩塌/反殺）
+	Misses     [][2]int    // 刺殺失敗：[攻擊者, 目標]
 	Looters    map[int]int // 兇手 → 取走的入場費
 	Exposed    map[int]int // 受害者 → 想殺他的人（死裏逃生者知道是誰動的手）
 	Collapse   bool        // 崩塌（全員背叛）
@@ -142,6 +145,13 @@ func ResolveHeistRound(seats []HeistSeat, progress, target int, r Rand) HeistRou
 		}
 		if victim.Action == HeistBetray && victim.Target == s.UserID {
 			res.Log = append(res.Log, fmt.Sprintf("%s 與 %s 同時背叛，互相抵銷——兩個都沒死", s.Name, victim.Name))
+			continue
+		}
+		if r.Float64() >= HeistKillChance {
+			// 刺殺失敗：對方逃過一劫，但知道是你動的手（已曝光）
+			res.Exposed[victim.UserID] = s.UserID
+			res.Misses = append(res.Misses, [2]int{s.UserID, victim.UserID})
+			res.Log = append(res.Log, fmt.Sprintf("%s 想殺 %s，但失手了——對方逃過一劫，而且知道是他", s.Name, victim.Name))
 			continue
 		}
 		victims[victim.UserID] = append(victims[victim.UserID], s.UserID)

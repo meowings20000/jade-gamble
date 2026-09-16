@@ -30,10 +30,17 @@ func betray(s []HeistSeat, from, target int) {
 }
 
 // 四人互相合作：+6 格，沒人死。
+// killRand：測試用——Float64 永遠回 0（= 0 < 0.70 → 刺殺必成功），
+// 讓「背叛殺人」的測試不受新的 70% 機率影響。
+type killRand struct{}
+
+func (killRand) Float64() float64 { return 0 }
+func (killRand) Intn(n int) int   { return 0 }
+
 func TestHeistMutualCoop(t *testing.T) {
 	s := seats(4, 5000)
 	coop(s, 1, 2, 3, 4)
-	r := ResolveHeistRound(s, 0, HeistTargetBase, NewDetRand(1))
+	r := ResolveHeistRound(s, 0, HeistTargetBase, killRand{})
 	if r.Progress != 6 || r.MutualPair != 6 {
 		t.Errorf("四人互相合作應該 +6 格，得到 progress=%d pair=%d", r.Progress, r.MutualPair)
 	}
@@ -47,7 +54,7 @@ func TestHeistBetrayKillsCooperating(t *testing.T) {
 	s := seats(4, 5000)
 	coop(s, 2, 3, 4)
 	betray(s, 1, 4)
-	r := ResolveHeistRound(s, 0, HeistTargetBase, NewDetRand(2))
+	r := ResolveHeistRound(s, 0, HeistTargetBase, killRand{})
 	if r.Deaths[4] != 1 {
 		t.Fatalf("4 號應該被 1 號殺，得到 %v", r.Deaths)
 	}
@@ -68,7 +75,7 @@ func TestHeistMutualBetrayalNoDeath(t *testing.T) {
 	coop(s, 3, 4)
 	betray(s, 1, 2)
 	betray(s, 2, 1)
-	r := ResolveHeistRound(s, 0, HeistTargetBase, NewDetRand(3))
+	r := ResolveHeistRound(s, 0, HeistTargetBase, killRand{})
 	if len(r.Deaths) != 0 {
 		t.Errorf("互相背叛應該兩個都沒死: %v", r.Deaths)
 	}
@@ -84,7 +91,7 @@ func TestHeistCollapseAllDead(t *testing.T) {
 		s[i].Action = HeistBetray
 		s[i].Target = (s[i].UserID % 4) + 1
 	}
-	r := ResolveHeistRound(s, 12, HeistTargetBase, NewDetRand(4))
+	r := ResolveHeistRound(s, 12, HeistTargetBase, killRand{})
 	if !r.Collapse {
 		t.Fatal("全員背叛應該崩塌")
 	}
@@ -103,7 +110,7 @@ func TestHeistRingWipeout(t *testing.T) {
 	betray(s, 1, 2)
 	betray(s, 2, 3)
 	betray(s, 3, 1)
-	r := ResolveHeistRound(s, 6, HeistTargetBase, NewDetRand(5))
+	r := ResolveHeistRound(s, 6, HeistTargetBase, killRand{})
 	if len(r.Deaths) != 3 {
 		t.Errorf("循環背叛應該死三人，得到 %v", r.Deaths)
 	}
