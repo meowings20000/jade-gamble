@@ -135,10 +135,18 @@ func (a *API) heistState(w http.ResponseWriter, r *http.Request) error {
 			fillIn = 0
 		}
 	}
+	// 誰想殺我：seat 上的 exposed 欄位存的是「攻擊者的 user id」（回合清票也不受影響），
+	// 用 id 去反查名字，才不會像之前讀本回合的票（每回合被清空）而永遠拿不到名字。
 	hunters := []string{}
 	for _, s := range seats {
-		if s.UserID != uid && s.Action == "betray" && s.Target == uid {
-			hunters = append(hunters, s.Name)
+		if s.UserID != uid || s.Exposed == 0 {
+			continue
+		}
+		for _, atk := range seats {
+			if atk.UserID == s.Exposed {
+				hunters = append(hunters, atk.Name)
+				break
+			}
 		}
 	}
 	out["hunters"] = hunters
