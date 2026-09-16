@@ -77,7 +77,58 @@ func (a *API) discordCallback(w http.ResponseWriter, r *http.Request) error {
 	if user.Avatar != "" {
 		avatar = fmt.Sprintf("https://cdn.discordapp.com/avatars/%s/%s.png", user.ID, user.Avatar)
 	}
-	return a.completeLogin(w, user.ID, user.Username, avatar)
+	// 公會白名單：不在指定伺服器的人，登不進來
+	if a.DiscordGuildID != "" {
+		in, err := userInGuild(tok.AccessToken, a.DiscordGuildID)
+		if err != nil {
+			return fmt.Errorf("guild check: %w", err)
+		}
+		if !in {
+			http.Redirect(w, r, "/?login_error=guild", http.StatusFound)
+			return nil
+		}
+	}
+	if err := a.completeLogin(w, user.ID, user.Username, avatar); err != nil {
+		return err
+	}
+	http.Redirect(w, r, "/", http.StatusFound)
+	return nil
+}
+
+// guildListContains: 這個使用者的伺服器清單裡有沒有 guildID。
+// 抽成純函式，測試不需要連 Discord。
+func guildListContains(raw []byte, guildID string) (bool, error) {
+	var list []struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(raw, &list); err != nil {
+		return false, err
+	}
+	for _, g := range list {
+		if g.ID == guildID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// userInGuild asks Discord which guilds this token's user belongs to.
+func userInGuild(accessToken, guildID string) (bool, error) {
+	req, _ := http.NewRequest("GET", "https://discord.com/api/v10/users/@me/guilds", nil)
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return false, fmt.Errorf("guild list status %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return false, err
+	}
+	return guildListContains(body, guildID)
 }
 
 // mockLogin is a test-only login (creates or reuses a user).

@@ -36,6 +36,7 @@ func main() {
 		DiscordClientID:     os.Getenv("DISCORD_CLIENT_ID"),
 		DiscordClientSecret: os.Getenv("DISCORD_CLIENT_SECRET"),
 		DiscordRedirectURI:  os.Getenv("DISCORD_REDIRECT_URI"),
+		DiscordGuildID:      os.Getenv("DISCORD_GUILD_ID"),
 		MockAuth:            os.Getenv("MOCK_AUTH") == "1",
 	}
 

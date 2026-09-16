@@ -130,6 +130,15 @@ async function refreshMe() {
 }
 
 $('#login-discord').addEventListener('click', () => location.href = '/api/auth/discord');
+
+// 公會白名單被擋回來時（?login_error=guild），在登入頁說清楚原因
+(function reportLoginError() {
+  const q = new URLSearchParams(location.search);
+  if (q.get('login_error') === 'guild') {
+    setTimeout(() => toast('這個 Discord 帳號不在授權的伺服器內，無法登入'), 400);
+    history.replaceState(null, '', location.pathname);
+  }
+})();
 $('#login-mock').addEventListener('click', async () => {
   try {
     await api('POST', '/api/auth/mock', { username: '訪客' + Math.floor(Math.random() * 10000) });

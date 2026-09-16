@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -16,6 +17,8 @@ type API struct {
 	DiscordClientID     string
 	DiscordClientSecret string
 	DiscordRedirectURI  string
+	// DiscordGuildID: 只有這個伺服器的成員可以登入（空 = 不限制）
+	DiscordGuildID string
 	// MockAuth enables the test-only mock Discord flow (default off in prod).
 	MockAuth bool
 }
@@ -71,8 +74,9 @@ func (a *API) Routes() *http.ServeMux {
 // status: public site config (login availability etc).
 func (a *API) status(w http.ResponseWriter, r *http.Request) error {
 	writeJSON(w, 200, map[string]any{
-		"discord_oauth": a.DiscordClientID != "",
-		"mock_auth":     a.MockAuth,
+		"discord_oauth":            a.DiscordClientID != "",
+		"discord_guild_restricted": a.DiscordGuildID != "",
+		"mock_auth":                a.MockAuth,
 	})
 	return nil
 }
@@ -86,8 +90,9 @@ func (a *API) discordAuthRedirect(w http.ResponseWriter, r *http.Request) error 
 	http.SetCookie(w, &http.Cookie{Name: "oauth_state", Value: state, Path: "/", MaxAge: 600, HttpOnly: true})
 	q := strings.NewReplacer()
 	_ = q
-	url := fmt.Sprintf("https://discord.com/oauth2/authorize?client_id=%s&redirect_uri=%s&response_type=code&scope=identify&state=%s",
-		a.DiscordClientID, a.DiscordRedirectURI, state)
+	// identify = 誰登入；guilds = 他在哪些伺服器（用來做公會白名單）
+	url := fmt.Sprintf("https://discord.com/oauth2/authorize?client_id=%s&redirect_uri=%s&response_type=code&scope=identify%%20guilds&state=%s",
+		a.DiscordClientID, url.QueryEscape(a.DiscordRedirectURI), state)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 	return nil
 }
