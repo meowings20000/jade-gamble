@@ -100,18 +100,18 @@ function renderHeist(d) {
       <div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">
         ${[{ user_id: me.user_id, name: me.name, alive: me.alive, payout: me.payout, tried: me.tried_to_kill_me, mine: true }, ...others.map(o => ({ ...o, mine: false }))]
       .map((s) => `
-          <div style="padding:8px;border-radius:8px;border:1px solid ${s.mine ? 'var(--gold)' : 'var(--line)'};background:var(--panel2);${s.alive ? '' : 'opacity:.5'}">
+          <div class="seat" style="padding:8px;border-radius:8px;border:1px solid ${s.mine ? 'var(--gold)' : 'var(--line)'};background:var(--panel2);${s.alive ? '' : 'opacity:.5'}">
             <div style="font-size:13px">${s.alive ? '🪨' : '☠️'} ${esc(s.name)}${s.mine ? '（你）' : ''}</div>
             ${s.payout > 0 ? `<div style="font-size:12px;color:var(--gold)">分到 ${fmt(s.payout)}</div>` : ''}
             ${s.tried ? `<div style="font-size:12px;color:#e06c6c">⚠ ${heistHunters(h).join('、') || '有人'} 想殺你（已曝光）</div>` : ''}
-            ${!s.mine && s.alive && !done ? `<div style="margin-top:4px"><button type="button" onclick="heistAct('betray',${s.user_id})" style="font-size:12px;padding:4px 8px">🔪 背叛他</button></div>` : ''}
+            ${!s.mine && s.alive && !done ? `<div style="margin-top:4px"><button type="button" onclick="heistAct('betray',${s.user_id})" class="hbtn hbtn-betray hbtn-sm">🔪 背叛他</button></div>` : ''}
           </div>`).join('')}
       </div>
       ${(done || h.status === 'open') ? `<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
         ${h.status === 'open' ? `<button type="button" onclick="heistFill()" class="hbtn hbtn-pill">🎲 直接開局（補 bot）</button>` : ''}
         <button type="button" onclick="heistLeave()" class="hbtn hbtn-ghost hbtn-pill">🚪 ${done ? '離開桌子' : '退出排隊（退還入場費）'}</button>
       </div>` : `
-      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <div class="hrow" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
         ${h.status === 'open' ? `<button type="button" onclick="heistFill()" class="hbtn hbtn-pill">🎲 直接開局（補 bot）</button>` : ''}
         <button type="button" onclick="heistAct('cooperate',0)" class="hbtn hbtn-coop hbtn-pill">🤝 合作（推進度）</button>
         <span style="font-size:12px;color:var(--muted);align-self:center">或按上面某個對手的「背叛他」——一輪只能對一個人下手</span>
@@ -174,6 +174,15 @@ if (!document.getElementById('heist-style')) {
   const st = document.createElement('style');
   st.id = 'heist-style';
   st.textContent = `
+  .hbtn-sm{padding:6px 14px;font-size:13px}
+  @media (max-width: 680px) {
+    .hbtn{width:100%;justify-content:center;display:flex;padding:13px 16px;font-size:15px}
+    .hbtn-sm{width:100%;padding:9px 12px;font-size:14px}
+    .hrow{flex-direction:column;gap:10px}
+    #heist-body > div > div{grid-template-columns:repeat(2,1fr) !important}
+    #heist-body .seat{padding:10px 8px}
+    #heist-body .card{padding:12px 10px}
+  }
   .hbtn{border:0;border-radius:999px;padding:10px 20px;font-size:14px;font-weight:700;color:#3a2a05;
     cursor:pointer;background:linear-gradient(180deg,#ffd977,#f0b93c);
     box-shadow:0 3px 0 #b8862a,0 6px 14px rgba(0,0,0,.35);transition:transform .08s,box-shadow .08s;letter-spacing:.3px}
