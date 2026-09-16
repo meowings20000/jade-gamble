@@ -14,6 +14,7 @@ def call(method, path, body=None):
     req = urllib.request.Request(BASE + path, method=method)
     req.add_header('Content-Type', 'application/json')
     req.add_header('User-Agent', UA)
+    req.add_header('User-Agent', UA)
     data = json.dumps(body).encode() if body is not None else None
     with opener.open(req, data) as r:
         return json.loads(r.read().decode())
@@ -75,6 +76,7 @@ op2 = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj2))
 def call2(method, path, body=None):
     req = urllib.request.Request(BASE + path, method=method)
     req.add_header('Content-Type', 'application/json')
+    req.add_header('User-Agent', UA)
     req.add_header('User-Agent', UA)
     data = json.dumps(body).encode() if body is not None else None
     with op2.open(req, data) as r:
@@ -140,7 +142,7 @@ else:
 req = urllib.request.Request(BASE + '/api/auth/mock', method='POST',
                              data=b'{"username":"a"}{"username":"b"}')
 req.add_header('Content-Type', 'application/json')
-    req.add_header('User-Agent', UA)
+req.add_header('User-Agent', UA)
 try:
     opener.open(req)
     raise SystemExit('✗ trailing JSON accepted!')

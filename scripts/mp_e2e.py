@@ -7,7 +7,7 @@ import urllib.request
 import http.cookiejar
 
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
-BASE = 'https://relief-cam-physician-institutions.trycloudflare.com'
+BASE = 'https://jade.meowmeow12245ouo.dpdns.org'   # 固定公網入口（原 trycloudflare 臨時通道已停用）
 
 def mk_opener():
     cj = http.cookiejar.CookieJar()
@@ -16,6 +16,7 @@ def mk_opener():
 def call(op, method, path, body=None):
     req = urllib.request.Request(BASE + path, method=method)
     req.add_header('Content-Type', 'application/json')
+    req.add_header('User-Agent', UA)
     req.add_header('User-Agent', UA)
     data = json.dumps(body).encode() if body is not None else None
     with op.open(req, data) as r:

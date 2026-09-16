@@ -20,6 +20,7 @@ def call(method, path, body=None):
     req = urllib.request.Request(BASE + path, method=method)
     req.add_header('Content-Type', 'application/json')
     req.add_header('User-Agent', UA)
+    req.add_header('User-Agent', UA)
     data = json.dumps(body).encode() if body is not None else None
     try:
         with op.open(req, data) as r:
