@@ -298,7 +298,7 @@ type HeistQueue struct {
 func (s *Store) OpenHeistQueues() ([]HeistQueue, error) {
 	rows, err := s.db.Query(`SELECT h.id, h.grade, h.entry, h.status,
 		(julianday('now') - julianday(h.created_at)) * 86400.0
-		FROM heists h WHERE h.status IN ('open','running')
+		FROM heists h WHERE h.status='open'
 		ORDER BY h.id DESC LIMIT 12`)
 	if err != nil {
 		return nil, err
