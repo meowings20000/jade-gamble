@@ -1,0 +1,20 @@
+services:
+  jade-gamble:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: jade-gamble:latest
+    container_name: jade-gamble
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3002:3002"
+    volumes:
+      - ./data:/data
+    environment:
+      - TZ=Asia/Taipei
+      - PORT=3002
+      - DB_PATH=/data/jade.db
+      - MOCK_AUTH=1
+      - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID:-}
+      - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:-}
+      - DISCORD_REDIRECT_URI=${DISCORD_REDIRECT_URI:-http://localhost:3002/api/auth/discord/callback}

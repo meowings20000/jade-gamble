@@ -1,0 +1,88 @@
+package domain
+
+// Shop pricing: personal shelves, free daily restock, escalating refresh.
+
+type ShelfSpec struct {
+	Grade     ShopGrade
+	Slots     int
+	BasePrice int // first refresh of the day
+}
+
+var shelfSpecs = map[ShopGrade]ShelfSpec{
+	KiloGrade:    {KiloGrade, 8, 300},
+	FeatureGrade: {FeatureGrade, 6, 1000},
+	WindowGrade:  {WindowGrade, 4, 5000},
+}
+
+// ShelfSize returns the slot count per grade.
+func ShelfSize(g ShopGrade) int { return shelfSpecs[g].Slots }
+
+// RefreshPrice: cost of the (n+1)-th refresh today for a grade.
+// Doubles each time: base, ×2, ×4, ×8… capped at ×16.
+func RefreshPrice(g ShopGrade, refreshesToday int) int {
+	base := shelfSpecs[g].BasePrice
+	mult := 1
+	for i := 0; i < refreshesToday && i < 4; i++ { // cap at 16×
+		mult *= 2
+	}
+	return base * mult
+}
+
+// CutReveal: 切石 one-shot result. Double coupon doubles payout (x0 stays 0
+// via Brick check upstream). Returns payout and full reveal payload.
+func CutReveal(s *Stone, doubleCoupon bool) (payout int) {
+	payout = s.BaseValue()
+	if doubleCoupon && s.Quality != Brick && payout > 0 {
+		payout *= 2
+	}
+	return payout
+}
+
+// Redemption catalog (兌換所). EV of every consumable is below its price.
+type ExchangeItem struct {
+	Key         string
+	Name        string
+	Price       int
+	Kind        string // "consumable" | "buff" | "cosmetic"
+	Description string
+}
+
+var ExchangeCatalog = []ExchangeItem{
+	{"frenzy_ticket", "刮到爽門票", 2000, "consumable",
+		"10 顆休閒石立即開刮，每顆掉 1~100 籌碼，純解壓。"},
+	{"insurance", "保險券", 0, "consumable",
+		"磨崩退回 50% 石底價。價格＝磨石標的底價的 15%（購買時自動計）。"},
+	{"double_coupon", "雙倍券", 3000, "consumable",
+		"下一刀切石賠率 ×2（磚頭料不救）。"},
+	{"free_refresh", "免費刷新券", 800, "consumable",
+		"任一檔貨架刷新 0 元一次，不佔當日遞增費率。"},
+	{"light_master", "打燈大師卡", 2000, "buff",
+		"24 小時打燈報告半價，誤導率 30%→22%。"},
+	{"golden_eye", "黃金瞳殘光", 10000, "buff",
+		"1 小時表現料皮殼多標註一條真實特徵。"},
+	{"polish_touch", "磨石手感", 5000, "buff",
+		"1 小時磨崩機率 −8%。"},
+	{"frame_gold", "賭場金頭像框", 2500, "cosmetic", "純裝飾。"},
+	{"frame_imperial", "帝王綠頭像框", 5000, "cosmetic", "純裝飾。"},
+}
+
+func ExchangeItemByKey(key string) (ExchangeItem, bool) {
+	for _, it := range ExchangeCatalog {
+		if it.Key == key {
+			return it, true
+		}
+	}
+	return ExchangeItem{}, false
+}
+
+// FrenzyTicketPayout: one casual stone pays 1..100, EV 60.
+func FrenzyTicketPayout(r Rand) int { return 1 + r.Intn(100) }
+
+// BankruptcyRelief options.
+const (
+	ReliefChips    = 1000
+	ReliefAltChips = 300
+)
+
+// DailyAllowance: chips granted on a brand-new day (loyalty drip).
+const DailyAllowance = 500

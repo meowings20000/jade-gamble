@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Test and visual artifacts
+frontend/mobile-*.png
+frontend/test-results/
+frontend/playwright-report/
+
+# Runtime database (kept locally / in Docker volume)
+data/
+*.db-shm
+*.db-wal
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

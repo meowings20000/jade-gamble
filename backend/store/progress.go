@@ -1,0 +1,152 @@
+package store
+
+import (
+	"database/sql"
+	"encoding/json"
+	"errors"
+
+	"jade-gamble/backend/domain"
+)
+
+// Tx is the transaction handle passed to API fns (alias of sql.Tx).
+type Tx = sql.Tx
+
+// WithTx runs fn in a transaction.
+func (s *Store) WithTx(fn func(tx *Tx) error) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	if err := fn(tx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
+// ---------- scratch progress ----------
+//
+// Layout: the crack layout is generated ONCE at scratch start with
+// crypto-random and persisted — never derived from the public seed
+// (which would leak crack positions to the client).
+
+type ScratchProgress struct {
+	StoneID     string
+	UserID      int
+	Revealed    map[int]bool
+	Accumulated int
+	Done        bool
+	Layout      ScratchLayout // persisted truth; empty for legacy rows
+}
+
+// ScratchLayout is the persisted server-side crack placement.
+type ScratchLayout struct {
+	CrackAt map[int]bool `json:"crack_at"`
+	DeepAt  map[int]bool `json:"deep_at"`
+}
+
+func (l ScratchLayout) KindAt(cell int) string {
+	switch {
+	case l.DeepAt[cell]:
+		return "deep_crack"
+	case l.CrackAt[cell]:
+		return "crack"
+	default:
+		return "clean"
+	}
+}
+
+func (p *ScratchProgress) RevealedList() []int {
+	out := []int{}
+	for c := range p.Revealed {
+		if p.Revealed[c] {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// RevealedKinds returns the kind of each already-revealed cell so the
+// client can repaint a resumed session truthfully.
+func (p *ScratchProgress) RevealedKinds() []map[string]any {
+	out := []map[string]any{}
+	for c := range p.Revealed {
+		if p.Revealed[c] {
+			out = append(out, map[string]any{"cell": c, "kind": p.Layout.KindAt(c)})
+		}
+	}
+	return out
+}
+
+// SellNowFee applies the 4% early-stop fee to the stored accumulation.
+func (p *ScratchProgress) SellNowFee() int {
+	if p.Done {
+		return p.Accumulated
+	}
+	return int(float64(p.Accumulated) * 0.96)
+}
+
+func (s *Store) GetScratchProgress(stoneID string) (*ScratchProgress, error) {
+	row := s.db.QueryRow(`SELECT stone_id, user_id, revealed, accumulated, done, layout
+		FROM scratch_progress WHERE stone_id=?`, stoneID)
+	var p ScratchProgress
+	var rev, layout string
+	var done int
+	err := row.Scan(&p.StoneID, &p.UserID, &rev, &p.Accumulated, &done, &layout)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	p.Done = done == 1
+	p.Revealed = map[int]bool{}
+	_ = json.Unmarshal([]byte(rev), &p.Revealed)
+	p.Layout = ScratchLayout{CrackAt: map[int]bool{}, DeepAt: map[int]bool{}}
+	_ = json.Unmarshal([]byte(layout), &p.Layout)
+	return &p, nil
+}
+
+func (s *Store) SaveScratchProgressFull(stoneID string, userID int, ss *domain.ScratchState, layout ScratchLayout) error {
+	rev, _ := json.Marshal(ss.Revealed)
+	lay, _ := json.Marshal(layout)
+	_, err := s.db.Exec(`INSERT INTO scratch_progress (stone_id, user_id, revealed, accumulated, done, layout)
+		VALUES (?,?,?,?,?,?)
+		ON CONFLICT(stone_id) DO UPDATE SET revealed=excluded.revealed, accumulated=excluded.accumulated,
+			done=excluded.done, layout=excluded.layout`,
+		stoneID, userID, string(rev), ss.Accumulated, b2i(ss.Done), string(lay))
+	return err
+}
+
+// ---------- polish progress (stone) ----------
+
+type PolishProgress struct {
+	StoneID  string
+	UserID   int
+	Stage    int
+	Alive    bool
+	BreakMod float64
+}
+
+func (s *Store) GetPolishProgress(stoneID string) (*PolishProgress, error) {
+	row := s.db.QueryRow(`SELECT stone_id, user_id, stage, alive, break_mod FROM polish_progress WHERE stone_id=?`, stoneID)
+	var p PolishProgress
+	var alive int
+	err := row.Scan(&p.StoneID, &p.UserID, &p.Stage, &alive, &p.BreakMod)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	p.Alive = alive == 1
+	return &p, nil
+}
+
+func (s *Store) SavePolishProgress(stoneID string, userID, stage int, alive bool, breakMod float64) error {
+	_, err := s.db.Exec(`INSERT INTO polish_progress (stone_id, user_id, stage, alive, break_mod)
+		VALUES (?,?,?,?,?)
+		ON CONFLICT(stone_id) DO UPDATE SET stage=excluded.stage, alive=excluded.alive, break_mod=excluded.break_mod`,
+		stoneID, userID, stage, b2i(alive), breakMod)
+	return err
+}
