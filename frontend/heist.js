@@ -1,3 +1,9 @@
+// 上一輪投背叛打我的人是誰（只有死裏逃生那位看得到，名字由後端 hunters 提供）
+function heistHunters(h) {
+  if (!h || !Array.isArray(h.hunters)) return [];
+  return h.hunters.filter(Boolean);
+}
+
 
 // ---------- 奪寶（四人囚徒困境）UI ----------
 let HEIST_POLL = null;
@@ -87,7 +93,7 @@ function renderHeist(d) {
           <div style="padding:8px;border-radius:8px;border:1px solid ${s.mine ? 'var(--gold)' : 'var(--line)'};background:var(--panel2);${s.alive ? '' : 'opacity:.5'}">
             <div style="font-size:13px">${s.alive ? '🪨' : '☠️'} ${esc(s.name)}${s.mine ? '（你）' : ''}</div>
             ${s.payout > 0 ? `<div style="font-size:12px;color:var(--gold)">分到 ${fmt(s.payout)}</div>` : ''}
-            ${s.tried ? `<div style="font-size:12px;color:#e06c6c">⚠ 有人想殺你（已曝光）</div>` : ''}
+            ${s.tried ? `<div style="font-size:12px;color:#e06c6c">⚠ ${heistHunters(h).join('、') || '有人'} 想殺你（已曝光）</div>` : ''}
             ${!s.mine && s.alive && !done ? `<div style="margin-top:4px"><button type="button" onclick="heistAct('betray',${s.user_id})" style="font-size:12px;padding:4px 8px">🔪 背叛他</button></div>` : ''}
           </div>`).join('')}
       </div>

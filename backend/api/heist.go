@@ -113,6 +113,8 @@ func (a *API) heistState(w http.ResponseWriter, r *http.Request) error {
 			"entry": s.Entry, "payout": s.Payout, "killed_by": s.KilledBy,
 			// 誰想殺我：只有「死裏逃生」的那位看得到兇手身份
 			"tried_to_kill_me": s.Exposed,
+			// 這一票是不是投給我（用來顯示「誰想殺你」的名字）
+			"attacked_me": s.Action == "betray" && s.Target == uid,
 		}
 		if s.UserID == uid {
 			mine = item
@@ -133,6 +135,13 @@ func (a *API) heistState(w http.ResponseWriter, r *http.Request) error {
 			fillIn = 0
 		}
 	}
+	hunters := []string{}
+	for _, s := range seats {
+		if s.UserID != uid && s.Action == "betray" && s.Target == uid {
+			hunters = append(hunters, s.Name)
+		}
+	}
+	out["hunters"] = hunters
 	out["heist"] = map[string]any{
 		"round_left": left, "action_sec": domain.HeistRoundSec, "bot_in": fillIn,
 		"rounds": domain.HeistRoundsFor(domain.ShopGrade(h.Grade)),

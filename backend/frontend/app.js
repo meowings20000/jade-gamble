@@ -141,7 +141,10 @@ async function refreshMe() {
     // 管理員才看得到控制臺
     const navAdmin = $('#nav-admin');
     if (navAdmin) navAdmin.style.display = me.is_admin ? '' : 'none';
-    show('shop');
+    // 只有在還沒進任何頁面（或還在登入頁）才切到商店；
+    // 否則在奪寶等頁面按到任何觸發 refreshMe 的動作都會被彈回主畫面。
+    const __act = document.querySelector('div.view.active');
+    if (!__act || __act.id === 'view-login') show('shop');
     loadShop();
     loadEvents();
   } else {
