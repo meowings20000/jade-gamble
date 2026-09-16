@@ -57,7 +57,7 @@ cd .. && python scripts/e2e_smoke.py           # 對 live Docker 全流程（登
 容器預設 `MOCK_AUTH=1`（訪客試玩）。接真 Discord：
 
 1. 到 [Discord Developer Portal](https://discord.com/developers/applications) → 你的應用（Client ID `1549397605623275520`）→ **OAuth2** → 複製／重設 **Client Secret**。
-2. 在同一頁 **Redirects** 加入：`https://<你的對外網址>/api/auth/discord/callback`（本機測試用 `http://localhost:3002/api/auth/discord/callback`）。
+2. 在同一頁 **Redirects** 加入：`https://jade.meowmeow12245ouo.dpdns.org/api/auth/discord/callback`（本機測試再加 `http://localhost:3002/api/auth/discord/callback`）。
 3. 填入 `.env`：
 
 ```bash
@@ -66,7 +66,22 @@ DISCORD_CLIENT_SECRET=貼上你的 Secret
 DISCORD_REDIRECT_URI=http://localhost:3002/api/auth/discord/callback
 ```
 
-4. `docker compose -p jade-gamble up -d` 重啟，`/api/status` 的 `discord_oauth` 會變 `true`，登入頁的「用 Discord 登入」按鈕自動出現。
+4. `DISCORD_GUILD_ID` 是**公會白名單**：只有這個伺服器的成員能登入（設 `1544329028012474458` = 猪猪岛；留空則不限制）。
+5. `docker compose -p jade-gamble up -d` 重啟，`/api/status` 的 `discord_oauth`／`discord_guild_restricted` 會變 `true`，登入頁的「用 Discord 登入」按鈕自動出現。
+
+## 公網部署（Cloudflare Zero Trust）
+
+固定網址：**https://jade.meowmeow12245ouo.dpdns.org**
+
+- Tunnel：`jade-gamble`（id `1b797080-1a1b-4166-b6c4-d4b9d1fe7630`），**本機管理**（設定檔 `C:\Users\User\.cloudflared\jade-config.yml`）
+- Ingress：`jade.meowmeow12245ouo.dpdns.org` → `http://localhost:3002`
+- 開機自啟：啟動資料夾的 `jade-gamble-tunnel.vbs`（登入時隱藏啟動，不需管理員權限）
+- 與 new-api 的 tunnel（`New API TUnnel`，dashboard 管理）完全獨立，互不影響
+
+手動重啟通道：
+```bash
+"C:/Program Files (x86)/cloudflared/cloudflared.exe" --config "C:/Users/User/.cloudflared/jade-config.yml" tunnel run jade-gamble
+```
 
 ## 部署筆記
 
