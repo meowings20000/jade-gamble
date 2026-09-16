@@ -19,8 +19,14 @@ func (q Quality) Name() string   { return qualityNames[q] }
 func (q Quality) String() string { return q.Name() }
 
 // QualityMultipliers: base value multiplier per quality tier.
+//
+// 6:4 平衡（2026-09-16）: 油青種（42% 質量）回到 1.02×，所以
+// 油青＋冰種＋玻璃種 = 60% 的石頭切出來不虧；豆種/磚頭料（40%）才是輸的。
+// 深裂機率同時由 18% 降到 6%，否則它會把贏的也打成輸。
+// 期望值 0.971 / 0.985 / 0.983（三檔），莊家邊際只剩 1.5~2.9%，
+// 玩家不容易一把破產。
 var qualityMult = map[Quality]float64{
-	Brick: 0.05, Bean: 0.35, OilGreen: 0.8, Icy: 2.2, Glass: 6.0,
+	Brick: 0.10, Bean: 0.50, OilGreen: 1.02, Icy: 1.35, Glass: 2.5,
 }
 
 func (q Quality) Multiplier() float64 { return qualityMult[q] }

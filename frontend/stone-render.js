@@ -393,10 +393,12 @@
       const ctx = this.ctx;
       ctx.clearRect(0, 0, this.w, this.h);
       ctx.drawImage(this.interior.el, 0, 0, this.w, this.h);
-      ctx.drawImage(this.truth.el, 0, 0, this.w, this.h);
+      // 石皮在真值層「下面」：刮開的裂紋／亮面才不會被皮蓋掉
+      // （原本順序相反，所以刮開也看不到裂紋）。
       ctx.globalAlpha = this.skinAlpha;
       ctx.drawImage(this.skin.el, 0, 0, this.w, this.h);
       ctx.globalAlpha = 1;
+      ctx.drawImage(this.truth.el, 0, 0, this.w, this.h);
     }
     brush(x, y) {
       const sc = this.skin.ctx;
@@ -507,17 +509,30 @@
       if (kind === 'crack' || kind === 'deep_crack') {
         const deep = kind === 'deep_crack';
         const rr = rngFrom(this.seed ^ (0xC4A0 + c * 977));
-        t.strokeStyle = deep ? 'rgba(60,10,8,0.95)' : 'rgba(20,16,12,0.9)';
-        t.lineWidth = deep ? 3.4 : 1.8;
-        t.lineCap = 'round';
-        t.beginPath();
-        let px = x0 + this.cw * 0.05, py = y0 + this.ch * (0.25 + rr() * 0.5);
-        t.moveTo(px, py);
-        for (let s = 0; s < 4; s++) {
-          px += this.cw * (0.15 + rr() * 0.15);
-          py = y0 + this.ch * (0.2 + rr() * 0.6);
-          t.lineTo(px, py);
+        const pts = [];
+        let px = x0 + this.cw * 0.04, py = y0 + this.ch * (0.25 + rr() * 0.5);
+        pts.push([px, py]);
+        for (let s = 0; s < 5; s++) {
+          px += this.cw * (0.12 + rr() * 0.14);
+          py = y0 + this.ch * (0.15 + rr() * 0.7);
+          pts.push([px, py]);
         }
+        const path = () => {
+          t.beginPath();
+          t.moveTo(pts[0][0], pts[0][1]);
+          for (const p of pts.slice(1)) t.lineTo(p[0], p[1]);
+        };
+        t.lineCap = 'round';
+        t.lineJoin = 'round';
+        // 外圈：淡色「錯位」邊，讓裂縫在深色肉裡也看得出來
+        t.strokeStyle = deep ? 'rgba(255,210,190,0.5)' : 'rgba(240,235,225,0.35)';
+        t.lineWidth = deep ? 7 : 4.6;
+        path();
+        t.stroke();
+        // 主線
+        t.strokeStyle = deep ? 'rgba(72,8,6,0.98)' : 'rgba(28,20,14,0.95)';
+        t.lineWidth = deep ? 4 : 2.4;
+        path();
         t.stroke();
         if (deep) {
           const g = t.createRadialGradient(x0 + this.cw / 2, y0 + this.ch / 2, 2,
@@ -560,6 +575,91 @@
   }
 
 
+
+  // ---- 隱藏彩蛋：切出非玉石的寶石（純程式繪製，無素材）----
+  const GEM_STYLE = {
+    amethyst: { core: '#e0b3ff', deep: '#4b1d84', spark: 6, name: '紫水晶' },
+    topaz: { core: '#ffeaa6', deep: '#8a6a12', spark: 6, name: '黃玉' },
+    sapphire: { core: '#a8d8ff', deep: '#123f8a', spark: 8, name: '藍寶石' },
+    ruby: { core: '#ff9d94', deep: '#8a0b1c', spark: 10, name: '紅寶石' },
+    emerald: { core: '#a9ffd2', deep: '#0a5a34', spark: 12, name: '祖母綠' },
+    diamond: { core: '#ffffff', deep: '#7fb6c8', spark: 16, name: '鑽石' },
+  };
+
+  function star(ctx, x, y, r, color) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(x - r, y); ctx.lineTo(x + r, y);
+    ctx.moveTo(x, y - r); ctx.lineTo(x, y + r);
+    ctx.stroke();
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, 'rgba(255,255,255,0.9)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  // gemCutView: 石皮外殼 + 右半切面露出一顆有切面與閃光的寶石。
+  function gemCutView(ctx, seed, w, h, key, grade) {
+    const st = GEM_STYLE[key];
+    const rnd = rngFrom(seed + key);
+    const cx = w * 0.5, cy = h * 0.5, rad = Math.min(w, h) * 0.40;
+    const pts = stoneBlob(rngFrom(seed), cx, cy, rad);
+
+    // 外殼：整顆石皮
+    ctx.save(); pathPts(ctx, pts); ctx.clip();
+    drawSkin(ctx, seed, grade != null ? grade : 0, w, h);
+    ctx.restore();
+
+    // 切面：右側露出一顆多面寶石
+    ctx.save(); pathPts(ctx, pts); ctx.clip();
+    const fx = cx + rad * 0.18, fy = cy, fr = rad * 0.78;
+    const grad = ctx.createRadialGradient(fx - fr * 0.25, fy - fr * 0.3, fr * 0.04, fx, fy, fr);
+    grad.addColorStop(0, st.core);
+    grad.addColorStop(0.5, st.deep);
+    grad.addColorStop(1, 'rgba(8,6,5,0.95)');
+    const n = 7 + Math.floor(rnd() * 3);
+    const verts = [];
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + rnd() * 0.25;
+      const rr = fr * (0.72 + rnd() * 0.4);
+      verts.push([fx + Math.cos(a) * rr, fy + Math.sin(a) * rr * 0.88]);
+    }
+    ctx.beginPath();
+    verts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+    // 切面線
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = 1;
+    for (const [x, y] of verts) {
+      ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(x, y); ctx.stroke();
+    }
+    ctx.restore();
+
+    // 切線（刀刃進去的方向）
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(cx - rad * 0.15, cy - rad * 1.05);
+    ctx.lineTo(cx - rad * 0.15, cy + rad * 1.05);
+    ctx.stroke();
+
+    // 閃光：越稀有越多
+    for (let i = 0; i < st.spark; i++) {
+      const a = rnd() * Math.PI * 2;
+      const rr = rad * (0.2 + rnd() * 0.75);
+      star(ctx, cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.8, 3 + rnd() * 7, st.core);
+    }
+  }
+
   // cutView: big cross-section — left half skin, right half revealed interior,
   // glow scaled with rarity (brick -> glass) and exotic variety palettes.
   function cutView(canvas, seed, quality, variety, opts) {
@@ -571,8 +671,19 @@
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, w, h);
 
-    // rarity tiers 0..4 (brick..glass)
     const qKey = quality || 'bean';
+    // 隱藏彩蛋：不是玉石就畫寶石（外殼石皮 + 切面寶石 + 閃光）
+    if (GEM_STYLE[qKey]) {
+      const halo2 = ctx.createRadialGradient(w / 2, h / 2, 4, w / 2, h / 2, Math.min(w, h) * 0.5);
+      halo2.addColorStop(0, 'rgba(255,255,255,0.16)');
+      halo2.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = halo2;
+      ctx.fillRect(0, 0, w, h);
+      gemCutView(ctx, seed, w, h, qKey, opts.grade);
+      return;
+    }
+
+    // rarity tiers 0..4 (brick..glass)
     const rarity = { brick: 0, bean: 1, oilgreen: 2, icy: 3, glass: 4 }[qKey] != null
       ? { brick: 0, bean: 1, oilgreen: 2, icy: 3, glass: 4 }[qKey] : 1;
     const seedNum = rngFrom(seed);

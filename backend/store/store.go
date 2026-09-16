@@ -41,7 +41,7 @@ func (s *Store) migrate() error {
 			discord_id TEXT UNIQUE NOT NULL,
 			username TEXT NOT NULL,
 			avatar TEXT NOT NULL DEFAULT '',
-			chips INTEGER NOT NULL DEFAULT 10000,
+			chips INTEGER NOT NULL DEFAULT 50000,
 			collection_score INTEGER NOT NULL DEFAULT 0,
 			title TEXT NOT NULL DEFAULT '',
 			streak_brick INTEGER NOT NULL DEFAULT 0,
@@ -142,6 +142,124 @@ func (s *Store) migrate() error {
 			ask_price INTEGER NOT NULL,
 			created_at TEXT NOT NULL DEFAULT (datetime('now'))
 		)`,
+		`CREATE TABLE IF NOT EXISTS bot_buys (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			stone_id TEXT NOT NULL,
+			seller_id INTEGER NOT NULL,
+			bot_key TEXT NOT NULL,
+			bot_name TEXT NOT NULL,
+			price INTEGER NOT NULL,
+			note TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL DEFAULT (datetime('now'))
+		)`,
+		`CREATE TABLE IF NOT EXISTS stone_log (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			stone_id TEXT NOT NULL,
+			action TEXT NOT NULL,
+			grade INTEGER NOT NULL DEFAULT 0,
+			quality TEXT NOT NULL DEFAULT '',
+			variety TEXT NOT NULL DEFAULT '',
+			price INTEGER NOT NULL DEFAULT 0,
+			payout INTEGER NOT NULL DEFAULT 0,
+			created_at TEXT NOT NULL DEFAULT (datetime('now'))
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_stone_log_user ON stone_log(user_id, id DESC)`,
+		`CREATE TABLE IF NOT EXISTS lit_stones (
+			stone_id TEXT PRIMARY KEY,
+			user_id INTEGER NOT NULL,
+			lit_at TEXT NOT NULL DEFAULT (datetime('now'))
+		)`,
+		`CREATE TABLE IF NOT EXISTS loans (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			principal INTEGER NOT NULL,
+			interest INTEGER NOT NULL,
+			hours INTEGER NOT NULL,
+			due_at TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'active',
+			appeals INTEGER NOT NULL DEFAULT 0,
+			reason TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL DEFAULT (datetime('now'))
+		)`,
+		`CREATE TABLE IF NOT EXISTS loan_chat (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			loan_id INTEGER NOT NULL,
+			role TEXT NOT NULL,
+			content TEXT NOT NULL,
+			created_at TEXT NOT NULL DEFAULT (datetime('now'))
+		)`,
+		`CREATE TABLE IF NOT EXISTS reward_requests (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			title TEXT NOT NULL DEFAULT '',
+			note TEXT NOT NULL DEFAULT '',
+			cost INTEGER NOT NULL DEFAULT 0,
+			status TEXT NOT NULL DEFAULT 'pending',
+			admin_note TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL DEFAULT (datetime('now')),
+			decided_at TEXT
+		)`,
+		`CREATE TABLE IF NOT EXISTS heists (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			grade INTEGER NOT NULL,
+			entry INTEGER NOT NULL,
+			pot INTEGER NOT NULL DEFAULT 0,
+			progress INTEGER NOT NULL DEFAULT 0,
+			target INTEGER NOT NULL DEFAULT 12,
+			round INTEGER NOT NULL DEFAULT 0,
+			status TEXT NOT NULL DEFAULT 'open',
+			round_at TEXT,
+			created_at TEXT NOT NULL DEFAULT (datetime('now'))
+		)`,
+		`CREATE TABLE IF NOT EXISTS heist_seats (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			heist_id INTEGER NOT NULL,
+			user_id INTEGER NOT NULL,
+			alive INTEGER NOT NULL DEFAULT 1,
+			action TEXT NOT NULL DEFAULT '',
+			target INTEGER NOT NULL DEFAULT 0,
+			entry INTEGER NOT NULL DEFAULT 0,
+			payout INTEGER NOT NULL DEFAULT 0,
+			killed_by INTEGER NOT NULL DEFAULT 0,
+			exposed INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_heist_seats ON heist_seats(heist_id, user_id)`,
+		`CREATE TABLE IF NOT EXISTS admins (
+			user_id INTEGER PRIMARY KEY,
+			note TEXT NOT NULL DEFAULT '',
+			added_at TEXT NOT NULL DEFAULT (datetime('now'))
+		)`,
+		`CREATE TABLE IF NOT EXISTS admin_log (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			admin_id INTEGER NOT NULL,
+			action TEXT NOT NULL,
+			target_id INTEGER NOT NULL DEFAULT 0,
+			amount INTEGER NOT NULL DEFAULT 0,
+			note TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL DEFAULT (datetime('now'))
+		)`,
+		`CREATE TABLE IF NOT EXISTS events (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			admin_id INTEGER NOT NULL,
+			title TEXT NOT NULL,
+			body TEXT NOT NULL DEFAULT '',
+			active INTEGER NOT NULL DEFAULT 1,
+			created_at TEXT NOT NULL DEFAULT (datetime('now')),
+			expires_at TEXT NOT NULL DEFAULT (datetime('now', '+1 day'))
+		)`,
+		`CREATE TABLE IF NOT EXISTS transfers (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			from_id INTEGER NOT NULL,
+			to_id INTEGER NOT NULL,
+			amount INTEGER NOT NULL,
+			condition TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'pending',
+			created_at TEXT NOT NULL DEFAULT (datetime('now')),
+			resolved_at TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_transfers_to ON transfers(to_id, status)`,
+		`CREATE INDEX IF NOT EXISTS idx_transfers_from ON transfers(from_id, status)`,
 		`CREATE INDEX IF NOT EXISTS idx_stones_owner ON stones(owner_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_listings_open ON listings(sold, created_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_npc_pool_user ON npc_pool(user_id)`,
@@ -163,11 +281,44 @@ func (s *Store) migrate() error {
 		!strings.Contains(err.Error(), "duplicate column") {
 		return fmt.Errorf("migrate scratch layout: %w", err)
 	}
+	if _, err := s.db.Exec(`ALTER TABLE scratch_progress ADD COLUMN order_cells TEXT NOT NULL DEFAULT ''`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column") {
+		return fmt.Errorf("migrate scratch order: %w", err)
+	}
+	if _, err := s.db.Exec(`ALTER TABLE loans ADD COLUMN rate REAL NOT NULL DEFAULT 0.25`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column") {
+		return fmt.Errorf("migrate loans rate: %w", err)
+	}
+	if _, err := s.db.Exec(`ALTER TABLE loans ADD COLUMN penalty INTEGER NOT NULL DEFAULT 0`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column") {
+		return fmt.Errorf("migrate loans penalty: %w", err)
+	}
+	if _, err := s.db.Exec(`ALTER TABLE loans ADD COLUMN hours INTEGER NOT NULL DEFAULT 24`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column") {
+		return fmt.Errorf("migrate loans hours: %w", err)
+	}
+	if _, err := s.db.Exec(`ALTER TABLE users ADD COLUMN daily_win_date TEXT NOT NULL DEFAULT ''`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column") {
+		return fmt.Errorf("migrate daily_win_date: %w", err)
+	}
 	if _, err := s.db.Exec(`ALTER TABLE users ADD COLUMN relief_at TEXT NOT NULL DEFAULT ''`); err != nil &&
 		!strings.Contains(err.Error(), "duplicate column") {
 		return fmt.Errorf("migrate relief_at: %w", err)
 	}
 
+	// 奪寶座位：玩家按「離開桌子」後就不要再顯示（歷史紀錄仍保留）
+	if _, err := s.db.Exec(`ALTER TABLE heist_seats ADD COLUMN left INTEGER NOT NULL DEFAULT 0`); err != nil &&
+		!strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
+		return fmt.Errorf("migrate heist seat left: %w", err)
+	}
+	// 奪寶回合計時（舊 DB 沒有這個欄位，要先 ALTER 再建索引，不然整個服務起不來）
+	if _, err := s.db.Exec(`ALTER TABLE heists ADD COLUMN round_at TEXT`); err != nil &&
+		!strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
+		return fmt.Errorf("migrate heist round_at: %w", err)
+	}
+	if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_heists_round ON heists(round_at)`); err != nil {
+		return fmt.Errorf("migrate heist round index: %w", err)
+	}
 	if _, err := s.db.Exec(`ALTER TABLE polish_progress ADD COLUMN force INTEGER NOT NULL DEFAULT 2`); err != nil &&
 		!strings.Contains(err.Error(), "duplicate column") {
 		return fmt.Errorf("migrate polish force: %w", err)
@@ -184,13 +335,14 @@ func (s *Store) GetUserByDiscordID(discordID string) (*domain.User, error) {
 }
 
 func (s *Store) CreateUser(discordID, username, avatar string) (*domain.User, error) {
-	res, err := s.db.Exec(`INSERT INTO users (discord_id, username, avatar) VALUES (?,?,?)`,
-		discordID, username, avatar)
+	// 明確給籌碼：舊資料庫的欄位預設值仍是 10000，不能靠 DEFAULT
+	res, err := s.db.Exec(`INSERT INTO users (discord_id, username, avatar, chips) VALUES (?,?,?,?)`,
+		discordID, username, avatar, domain.SignupChips)
 	if err != nil {
 		return nil, err
 	}
 	id, _ := res.LastInsertId()
-	return &domain.User{ID: int(id), DiscordID: discordID, Username: username, Avatar: avatar, Chips: 10000}, nil
+	return &domain.User{ID: int(id), DiscordID: discordID, Username: username, Avatar: avatar, Chips: domain.SignupChips}, nil
 }
 
 func scanUser(row *sql.Row) (*domain.User, error) {
@@ -201,6 +353,12 @@ func scanUser(row *sql.Row) (*domain.User, error) {
 		return nil, err
 	}
 	return u, nil
+}
+
+// UpdateProfile: Discord 名稱/頭像變了就跟著更新。
+func (s *Store) UpdateProfile(id int, username, avatar string) error {
+	_, err := s.db.Exec(`UPDATE users SET username = ?, avatar = ? WHERE id = ?`, username, avatar, id)
+	return err
 }
 
 func (s *Store) GetUser(id int) (*domain.User, error) {
@@ -233,7 +391,7 @@ func (s *Store) Leaderboard(kind string, limit int) ([]domain.LeaderEntry, error
 	var err error
 	switch kind {
 	case "wealth":
-		rows, err = s.db.Query(`SELECT id, username, avatar, chips, 0 FROM users ORDER BY chips DESC LIMIT ?`, limit)
+		rows, err = s.db.Query(`SELECT id, username, avatar, chips, 0 FROM users WHERE discord_id NOT LIKE 'bot:%' ORDER BY chips DESC LIMIT ?`, limit)
 	case "collection":
 		rows, err = s.db.Query(`SELECT id, username, avatar, collection_score, 0 FROM users ORDER BY collection_score DESC LIMIT ?`, limit)
 	default:

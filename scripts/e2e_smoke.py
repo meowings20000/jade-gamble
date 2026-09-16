@@ -29,7 +29,7 @@ print('✓ login:', r['username'])
 # 2. me
 me = call('GET', '/api/me')
 print('✓ signup chips:', me['chips'])
-assert me['chips'] == 10000
+assert me['chips'] == 50000
 
 # 3. shop
 shop = call('GET', '/api/shop')

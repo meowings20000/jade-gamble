@@ -8,6 +8,15 @@ import (
 	"jade-gamble/backend/store"
 )
 
+// perCellFor: 每格價值（與 domain.perCellOf 同規則，至少 1 籌碼）。
+func perCellFor(st *domain.Stone) int {
+	v := st.BaseValue() / domain.ScratchCells
+	if v < 1 {
+		v = 1
+	}
+	return v
+}
+
 // ---------- 刮 scratch (brush UX; server-authoritative layout) ----------
 
 // scratchStart opens (or resumes) a scratch session.
@@ -36,7 +45,7 @@ func (a *API) scratchStart(w http.ResponseWriter, r *http.Request) error {
 	writeJSON(w, 200, map[string]any{
 		"stone_id": st.ID, "seed": seedStr(st.Seed), "grade": int(st.Grade),
 		"revealed": prog.RevealedKinds(), "accumulated": prog.Accumulated,
-		"done": prog.Done, "hint": st.LightHint,
+		"done": prog.Done, "hint": hintFor(a, st),
 	})
 	return nil
 }
@@ -70,23 +79,15 @@ func (a *API) scratchReveal(w http.ResponseWriter, r *http.Request) error {
 	}
 	kind := prog.Layout.KindAt(body.Cell)
 
-	// recompute accumulated deterministically from layout+revealed set
+	// 由「開格順序」重算累積值（順序有意義：裂紋是乘法）。
 	ss := &domain.ScratchState{
-		Revealed:    prog.Revealed,
-		CrackAt:     prog.Layout.CrackAt,
-		DeepAt:      prog.Layout.DeepAt,
-		Accumulated: 0,
-		PerCell:     st.BaseValue() / domain.ScratchCells,
-		Done:        false,
+		Revealed: prog.Revealed,
+		CrackAt:  prog.Layout.CrackAt,
+		DeepAt:   prog.Layout.DeepAt,
+		Order:    append(append([]int{}, prog.Order...), body.Cell),
+		PerCell:  perCellFor(st),
 	}
-	for c := 0; c < domain.ScratchCells; c++ {
-		if prog.Revealed[c] {
-			ss.Reveal(c) // replay for accumulated
-		}
-	}
-	hit, deep := ss.Reveal(body.Cell)
-	_ = hit
-	_ = deep
+	ss.Recompute()
 
 	if err := a.Store.SaveScratchProgressFull(st.ID, uid, ss, prog.Layout); err != nil {
 		return err
@@ -115,6 +116,10 @@ func (a *API) scratchReveal(w http.ResponseWriter, r *http.Request) error {
 					return err
 				}
 				firstScore, isNew = s, isNew2
+			}
+			if err := a.Store.LogStoneTx(tx, uid, st.ID, "scratch", int(st.Grade),
+				st.Quality.Name(), st.Variety.Name(), st.Price, payout); err != nil {
+				return err
 			}
 			return a.Store.SetStoneStateTx(tx, st.ID, domain.StateUsed, uid)
 		}); err != nil {

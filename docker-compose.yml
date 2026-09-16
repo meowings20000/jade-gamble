@@ -19,3 +19,8 @@ services:
       - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:-}
       - DISCORD_GUILD_ID=${DISCORD_GUILD_ID:-}
       - DISCORD_REDIRECT_URI=${DISCORD_REDIRECT_URI:-http://localhost:3002/api/auth/discord/callback}
+      - ADMIN_DISCORD_IDS=${ADMIN_DISCORD_IDS:-}
+      # 喵喵錢莊的 AI（值只放 .env，compose 不寫死；.env 已 gitignore）
+      - AI_API_KEY=${AI_API_KEY:-}
+      - AI_BASE_URL=${AI_BASE_URL:-https://api.deepseek.com/v1}
+      - AI_MODEL=${AI_MODEL:-deepseek-chat}

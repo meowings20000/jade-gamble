@@ -65,9 +65,10 @@ type GradeEcon struct {
 }
 
 var gradeEcon = map[ShopGrade]GradeEcon{
-	KiloGrade:    {EVMult: 0.95, PriceLo: 500, PriceHi: 2000, LieRate: 0.30},
-	FeatureGrade: {EVMult: 0.93, PriceLo: 3000, PriceHi: 15000, LieRate: 0.28},
-	WindowGrade:  {EVMult: 0.90, PriceLo: 20000, PriceHi: 200000, LieRate: 0.22},
+	// 三檔定位: 蒙頭便宜、賠率最大（變異數最高）；開窗穩定、賠率小。
+	KiloGrade:    {EVMult: 0.973, PriceLo: 300, PriceHi: 1200, LieRate: 0.30},
+	FeatureGrade: {EVMult: 0.981, PriceLo: 3000, PriceHi: 15000, LieRate: 0.28},
+	WindowGrade:  {EVMult: 0.984, PriceLo: 15000, PriceHi: 150000, LieRate: 0.22},
 }
 
 func (g ShopGrade) Econ() GradeEcon { return gradeEcon[g] }

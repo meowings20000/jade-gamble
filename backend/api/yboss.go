@@ -79,7 +79,7 @@ func (a *API) ybossBet(w http.ResponseWriter, r *http.Request) error {
 	writeJSON(w, 200, map[string]any{
 		"choice": "polish", "stake": body.Stake,
 		"rung": 0, "mult": 1.0, "label": domain.YBossPolishLadder[0].Label,
-		"chips": bal, "ladder": ybossLadderView(),
+		"chips": bal, "ladder": ybossLadderView(), "odds": domain.YBossCutOdds(),
 	})
 	return nil
 }
@@ -152,6 +152,18 @@ func (a *API) ybossPolish(w http.ResponseWriter, r *http.Request) error {
 		"action": "advance", "alive": alive, "rung": newRung,
 		"mult":  domain.YBossPolishLadder[newRung].Mult,
 		"label": domain.YBossPolishLadder[newRung].Label,
+	})
+	return nil
+}
+
+// ybossOdds: GET /api/yboss/odds —— 賠率表（前端顯示用，單一真相在 domain）。
+func (a *API) ybossOdds(w http.ResponseWriter, r *http.Request) error {
+	if _, err := a.userID(r); err != nil {
+		return err
+	}
+	writeJSON(w, 200, map[string]any{
+		"cut":    domain.YBossCutOdds(),
+		"ladder": ybossLadderView(),
 	})
 	return nil
 }

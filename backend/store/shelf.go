@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"jade-gamble/backend/domain"
 )
@@ -29,20 +30,26 @@ func (s *Store) CountUsers() (int, error) {
 // EnsureShelf creates the shelf rows for a user if missing, then returns them.
 // Daily reset happens ONLY on real day rollover (restock_date <> today):
 // it must not clobber refreshed_today on every call.
-func (s *Store) EnsureShelf(userID int, date string) error {
+// EnsureShelf: 建立貨架列；跨日時把整排清空（隔天免費補貨一次的起點）。
+// 回傳 newDay = 這次呼叫是否跨日（呼叫端據此決定要不要真的生石頭）。
+func (s *Store) EnsureShelf(userID int, date string) (bool, error) {
 	for g := domain.KiloGrade; g <= domain.WindowGrade; g++ {
 		for slot := 0; slot < domain.ShelfSize(g); slot++ {
 			_, err := s.db.Exec(`INSERT OR IGNORE INTO shelves (user_id, grade, slot, restock_date) VALUES (?,?,?,?)`,
 				userID, int(g), slot, "")
 			if err != nil {
-				return err
+				return false, err
 			}
 		}
 	}
-	_, err := s.db.Exec(`UPDATE shelves SET refreshed_today = 0, restock_date = ?,
+	res, err := s.db.Exec(`UPDATE shelves SET refreshed_today = 0, restock_date = ?,
 		stone_id = NULL
 		WHERE user_id = ? AND restock_date <> ?`, date, userID, date)
-	return err
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
 }
 
 // ShelfStones returns the visible stone ids on a user's shelf for a grade.
@@ -230,6 +237,83 @@ type Listing struct {
 	WindowDesc string `json:"window_desc"`
 }
 
+// ---------- 拍賣機器人（收料 bot）----------
+
+// BotCandidate: 一張放太久沒人標的掛單，連同它的喊價。
+type BotCandidate struct {
+	ListingID int
+	StoneID   string
+	SellerID  int
+	AskPrice  int
+	AgeHours  float64
+}
+
+// StaleListings: 玩家掛單（seller_id != 0）放置超過 staleHours 小時還沒賣掉的。
+func (s *Store) StaleListings(staleMinutes float64, limit int) ([]BotCandidate, error) {
+	rows, err := s.db.Query(`SELECT l.id, l.stone_id, l.seller_id, l.ask_price,
+		(julianday('now') - julianday(l.created_at)) * 1440.0 AS age_mins
+		FROM listings l
+		WHERE l.sold = 0 AND l.seller_id != 0
+		  AND (julianday('now') - julianday(l.created_at)) * 1440.0 >= ?
+		ORDER BY l.created_at ASC LIMIT ?`, staleMinutes, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []BotCandidate{}
+	for rows.Next() {
+		var c BotCandidate
+		if err := rows.Scan(&c.ListingID, &c.StoneID, &c.SellerID, &c.AskPrice, &c.AgeHours); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// RecordBotBuyTx: 記一筆 bot 成交，讓市場看得到「誰剛才來收料」。
+func (s *Store) RecordBotBuyTx(tx *sql.Tx, stoneID string, sellerID int, botKey, botName string, price int, note string) error {
+	_, err := tx.Exec(`INSERT INTO bot_buys (stone_id, seller_id, bot_key, bot_name, price, note) VALUES (?,?,?,?,?,?)`,
+		stoneID, sellerID, botKey, botName, price, note)
+	return err
+}
+
+// BotBuy: 一筆 bot 收料紀錄。
+type BotBuy struct {
+	StoneID string `json:"stone_id"`
+	BotName string `json:"bot"`
+	Price   int    `json:"price"`
+	AgeMins int    `json:"age_mins"`
+	Note    string `json:"note"`
+}
+
+// RecentBotBuys: 最近的 bot 收料紀錄（市場頁顯示用）。
+func (s *Store) RecentBotBuys(limit int) ([]BotBuy, error) {
+	rows, err := s.db.Query(`SELECT stone_id, bot_name, price, note,
+		CAST((julianday('now') - julianday(created_at)) * 1440 AS INTEGER)
+		FROM bot_buys ORDER BY id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []BotBuy{}
+	for rows.Next() {
+		var b BotBuy
+		if err := rows.Scan(&b.StoneID, &b.BotName, &b.Price, &b.Note, &b.AgeMins); err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}
+
+// BackdateListing: 測試用——把掛單時間往前挪，模擬「放很久沒人標」。
+func (s *Store) BackdateListing(id int, hours float64) error {
+	_, err := s.db.Exec(`UPDATE listings SET created_at = datetime('now', ?) WHERE id=?`,
+		fmt.Sprintf("-%f hours", hours), id)
+	return err
+}
+
 // CountNPCPool: stones left in THIS user's private 礦區直送 pool.
 func (s *Store) CountNPCPool(userID int) (int, error) {
 	var n int
@@ -335,4 +419,33 @@ func (s *Store) BuyListingTx(tx *sql.Tx, listingID, buyerID int) error {
 		return errors.New("listing already sold")
 	}
 	return nil
+}
+
+// ---------- 打燈紀錄 ----------
+
+// IsLit: 這顆石頭有沒有人付費打過燈（打過的才看得到描述）。
+func (s *Store) IsLit(stoneID string) bool {
+	var n int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM lit_stones WHERE stone_id = ?`, stoneID).Scan(&n); err != nil {
+		return false
+	}
+	return n > 0
+}
+
+// MarkLit: 記下這顆石頭打過燈。
+func (s *Store) MarkLit(stoneID string, userID int) error {
+	_, err := s.db.Exec(`INSERT INTO lit_stones (stone_id, user_id) VALUES (?,?)
+		ON CONFLICT(stone_id) DO NOTHING`, stoneID, userID)
+	return err
+}
+
+// EquippedFrame: 玩家有沒有金的／帝王的頭像框（兌換所的裝飾品）。
+func (s *Store) EquippedFrame(userID int) string {
+	for _, key := range []string{"frame_imperial", "frame_gold"} {
+		var n int
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM inventory_items WHERE user_id = ? AND item_key = ?`, userID, key).Scan(&n); err == nil && n > 0 {
+			return key
+		}
+	}
+	return ""
 }

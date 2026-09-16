@@ -101,6 +101,27 @@ button{-webkit-tap-highlight-color:transparent}
 
 body.mobile #classic-bet,body.mobile #yboss-bet{display:none !important}
 body.mobile nav #classic-bet,body.mobile nav #yboss-bet{display:inline-flex !important}
+
+  /* DC 頭像與頭像框（兌換所的金框／帝王框在這裡有用了） */
+  #userbox{display:flex;align-items:center;gap:6px}
+  .avatar-ring{width:30px;height:30px;border-radius:50%;overflow:hidden;display:inline-flex;
+    align-items:center;justify-content:center;background:var(--panel2);border:2px solid var(--line);flex:0 0 auto}
+  .avatar-ring img{width:100%;height:100%;object-fit:cover;display:block}
+  .avatar-ring.frame_gold{border-color:var(--gold);box-shadow:0 0 6px rgba(212,169,78,.6)}
+  .avatar-ring.frame_imperial{border-color:#7ef0c0;box-shadow:0 0 10px rgba(126,240,192,.8)}
+  .avatar-ring .ph{font-size:15px}
+
+  /* 喵喵錢莊對話框 */
+  #bk-chat{display:flex;flex-direction:column;gap:8px}
+  .chat-row{display:flex;gap:8px;align-items:flex-end}
+  .chat-row.me{flex-direction:row-reverse}
+  .chat-av{width:28px;height:28px;border-radius:50%;background:var(--panel2);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font-size:14px;flex:0 0 auto}
+  .chat-bubble{max-width:78%;padding:8px 10px;border-radius:12px;font-size:13px;line-height:1.5;white-space:pre-wrap}
+  .chat-row.them .chat-bubble{background:var(--panel2);border:1px solid var(--line);border-bottom-left-radius:3px}
+  .chat-row.me .chat-bubble{background:rgba(212,169,78,.16);border:1px solid rgba(212,169,78,.35);border-bottom-right-radius:3px}
+  .chat-name{font-size:11px;color:var(--muted);margin:0 4px}
+  #bk-chat .typing{font-size:12px;color:var(--muted);padding-left:36px}
 </style>
 </head>
 <body>
@@ -110,13 +131,21 @@ body.mobile nav #classic-bet,body.mobile nav #yboss-bet{display:inline-flex !imp
     <button data-view="shop" class="active">商店</button>
     <button data-view="warehouse">倉庫</button>
     <button data-view="market">競標場</button>
+    <button data-view="transfer">轉賬</button>
+    <button data-view="history">紀錄</button>
+    <button data-view="bank">喵喵錢莊</button>
+    <button data-view="heist">奪寶</button>
+    <button data-view="admin" id="nav-admin" style="display:none">控制臺</button>
     <button data-view="exchange">兌換所</button>
     <button data-view="collection">圖鑑</button>
     <button data-view="ranks">排行榜</button>
   </nav>
   <div id="balance">
     <div id="userbox"></div>
-    <div class="chips" id="chips"></div>
+    <div class="chips-row" style="display:flex;align-items:center;gap:6px">
+      <img src="catcoin.png" alt="喵喵幣" style="width:22px;height:22px;filter:drop-shadow(0 0 4px rgba(255,200,80,.45))">
+      <div class="chips" id="chips"></div>
+    </div>
     <button class="btn" id="classic-bet" style="display:none">传统模式</button>
     <button class="btn" id="yboss-bet" style="display:none">Y佬模式</button>
     <button class="btn ghost" id="lang-toggle" title="繁简切换">简</button>
@@ -128,12 +157,13 @@ body.mobile nav #classic-bet,body.mobile nav #yboss-bet{display:inline-flex !imp
     <div class="card" id="login-view">
       <div class="logo">🗿</div>
       <h2>一刀窮 · 一刀富</h2>
-      <p style="color:var(--muted);font-size:13px;margin-bottom:16px">純虛擬籌碼，不含任何真實金錢。</p>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:16px">純虛擬喵喵幣，不含任何真實金錢。</p>
       <button class="btn" id="login-discord">用 Discord 登入</button>
-      <button class="btn ghost" id="login-mock" style="display:none;margin-top:10px">訪客試玩</button>
+      <button class="btn ghost" id="login-mock" style="margin-top:10px">訪客試玩</button>
     </div>
   </div>
   <div class="view" id="view-shop">
+    <div id="event-banner"></div>
     <h2>每日礦區直送</h2>
     <p class="price-note" style="color:var(--muted);font-size:13px;margin-bottom:16px">每天 00:00 免費補貨；不滿意可以刷新，越刷越貴。</p>
     <div id="shop-grades"></div>
@@ -144,18 +174,149 @@ body.mobile nav #classic-bet,body.mobile nav #yboss-bet{display:inline-flex !imp
   </div>
   <div class="view" id="view-market">
     <h2>競標場</h2>
+    <p id="market-bots" style="font-size:12px;color:var(--muted);margin-bottom:8px"></p>
     <div id="market-list" class="grid" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr))"></div>
   </div>
   <div class="view" id="view-exchange">
+    <div id="reward-box"></div>
     <h2>兌換所</h2>
     <div id="exchange-list" class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))"></div>
     <div class="card" style="margin-top:16px">
       <h3 style="color:var(--gold);margin-bottom:8px">破產救濟</h3>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:10px">籌碼歸零時可以領救濟（每日 3 次）。</p>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:10px">喵喵幣低於 <b>5,000</b> 就可以領救濟，每 3 小時一次。</p>
       <div class="row">
-        <button class="btn" id="relief-chips">領 1,000 籌碼</button>
-        <button class="btn ghost" id="relief-ticket">刮到爽門票 + 300 籌碼</button>
+        <button class="btn" id="relief-chips">領 1,000 喵喵幣</button>
+        <button class="btn ghost" id="relief-ticket">刮到爽門票 + 300 喵喵幣</button>
       </div>
+    </div>
+  </div>
+  <div class="view" id="view-transfer">
+    <h2>轉賬</h2>
+    <div class="card">
+      <h3 style="color:var(--gold);margin-bottom:8px">送喵喵幣給別人</h3>
+      <div class="row" style="gap:8px;flex-wrap:wrap">
+        <input id="tf-to" placeholder="對方名稱（例如：小明）" autocomplete="off">
+        <input id="tf-amount" type="number" min="1" placeholder="金額">
+      </div>
+      <textarea id="tf-cond" rows="2" placeholder="條件（可留空）。填了條件的話，對方接受才成交；不接受就全額退還。"
+        style="width:100%;margin-top:8px;resize:vertical;font-family:inherit"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="tf-send">送出</button>
+        <span style="font-size:12px;color:var(--muted)">不填條件＝即時到賬</span>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="color:var(--gold);margin-bottom:8px">別人轉給我的（待接受）</h3>
+      <div id="tf-incoming"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="color:var(--gold);margin-bottom:8px">我發出的（待對方接受）</h3>
+      <div id="tf-outgoing"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="color:var(--muted);margin-bottom:8px">紀錄</h3>
+      <div id="tf-history"></div>
+    </div>
+  </div>
+  <div class="view" id="view-admin">
+    <h2>管理員控制臺</h2>
+    <div class="card">
+      <h3 style="color:var(--gold);margin-bottom:8px">營運數字</h3>
+      <div id="admin-stats" style="font-size:13px;line-height:1.9;color:var(--muted)"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="color:var(--gold);margin-bottom:8px">派喵喵幣 / 收回喵喵幣</h3>
+      <div class="row" style="gap:8px;flex-wrap:wrap">
+        <input id="ad-user" placeholder="玩家名稱（完全一樣）" autocomplete="off">
+        <input id="ad-amount" type="number" placeholder="金額（負數＝收回）">
+      </div>
+      <div class="row" style="margin-top:8px">
+        <input id="ad-reason" placeholder="備註（可留空）" autocomplete="off" style="flex:1">
+        <button class="btn" id="ad-grant">送出</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <input id="ad-all" type="number" placeholder="全服紅包金額">
+        <button class="btn" id="ad-giveall">全服發紅包</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="color:var(--gold);margin-bottom:8px">發佈小活動</h3>
+      <input id="ad-ev-title" placeholder="活動標題（例如：今晚九點磨石祭）" style="width:100%">
+      <textarea id="ad-ev-body" rows="2" placeholder="活動內容（玩家會在商店頁看到公告）"
+        style="width:100%;margin-top:8px;resize:vertical;font-family:inherit"></textarea>
+      <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
+        <input id="ad-ev-hours" type="number" placeholder="持續時數（預設 24）">
+        <input id="ad-ev-amount" type="number" placeholder="順便發紅包（可留空）">
+        <button class="btn" id="ad-ev-pub">發佈</button>
+      </div>
+      <div id="ad-events" style="margin-top:12px"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="color:var(--muted);margin-bottom:8px">獎勵審核</h3>
+      <div id="ad-rewards"></div>
+      <h3 id="ad-players-title" style="color:var(--muted);margin-bottom:8px">玩家</h3>
+      <div id="ad-players" style="font-size:13px"></div>
+      <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap">
+        <button class="btn ghost" id="ad-hide-mock">隱藏測試帳號</button>
+        <button class="btn ghost" id="ad-cleanup">清掉測試帳號（mock:）</button>
+      </div>
+      <p id="ad-mydiscord" style="font-size:12px;color:var(--muted);margin-top:10px"></p>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="color:var(--muted);margin-bottom:8px">拍賣收料機器人</h3>
+      <div id="ad-bots" style="font-size:13px;color:var(--muted)"></div>
+    </div>
+  </div>
+  <div class="view" id="view-history">
+    <h2>我的紀錄</h2>
+    <div class="card">
+      <h3 style="color:var(--gold);margin-bottom:8px">總帳</h3>
+      <div id="hist-stats" style="font-size:13px;line-height:1.9;color:var(--muted)"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="color:var(--gold);margin-bottom:8px">稱號</h3>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">解鎖後按「裝上」，稱號會顯示在名字前面。</p>
+      <div id="title-grid" class="grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="color:var(--muted);margin-bottom:8px">處理過的石頭（新到舊）</h3>
+      <div id="hist-list" style="font-size:13px"></div>
+    </div>
+  </div>
+  <div class="view" id="view-heist">
+    <div id="heist-body"></div>
+  </div>
+
+  <div class="view" id="view-bank">
+    <h2>喵喵錢莊 🐾</h2>
+    <div class="card">
+      <h3 style="color:var(--gold);margin-bottom:8px">貸款條款</h3>
+      <table id="bank-terms" style="width:100%;font-size:13px;border-collapse:collapse"></table>
+    </div>
+    <div class="card" style="margin-top:16px" id="bank-current"></div>
+    <div class="card" style="margin-top:16px" id="bank-offer"></div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="color:var(--gold);margin-bottom:8px">我要借錢</h3>
+      <table style="width:100%;font-size:13px">
+        <tr><td style="padding:4px 0">借多少</td><td><input id="bk-amount" type="number" min="5000" step="1000" placeholder="5000 ~ 200000" style="width:100%"></td></tr>
+        <tr><td style="padding:4px 0">幾小時後還</td><td><input id="bk-hours" type="number" min="1" max="24" value="24" style="width:100%"></td></tr>
+        <tr><td style="padding:4px 0">利率（自填）</td><td><input id="bk-rate" type="number" min="10" max="60" value="30" style="width:100%"> <span style="font-size:12px;color:var(--muted)">%　底線 30%，喊低要說服老闆娘喵</span></td></tr>
+        <tr><td style="padding:4px 0;vertical-align:top">理由</td><td><input id="bk-reason" placeholder="跟老闆娘說清楚喵" style="width:100%"></td></tr>
+        <tr><td></td><td style="padding-top:8px"><button class="btn" id="bk-apply">提出申請</button>
+          <span id="bk-est" style="font-size:12px;color:var(--muted);margin-left:8px"></span></td></tr>
+      </table>
+    </div>
+    <div class="card" style="margin-top:16px;display:none" id="bank-appeal-card">
+      <h3 style="color:var(--gold);margin-bottom:8px">申訴（最多 3 輪）</h3>
+      <div id="bk-chat" style="font-size:13px;max-height:260px;overflow-y:auto"></div>
+      <div class="row" style="margin-top:8px">
+        <input id="bk-say" placeholder="跟她說…" style="flex:1">
+        <button class="btn ghost" id="bk-send">送出</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="color:var(--muted);margin-bottom:8px">借貸紀錄</h3>
+      <table id="bank-history" style="width:100%;font-size:13px;border-collapse:collapse"></table>
     </div>
   </div>
   <div class="view" id="view-collection">
@@ -173,7 +334,9 @@ body.mobile nav #classic-bet,body.mobile nav #yboss-bet{display:inline-flex !imp
     <div class="card"><table id="hall-table"></table></div>
   </div>
 </main>
-<script src="stone-render.js"></script>
-<script src="app.js"></script>
+<script src="stone-render.js?v=20260916e"></script>
+<script src="heist.js?v=20260916l"></script>
+  <script src="rewards.js?v=20260916l"></script>
+  <script src="app.js?v=20260916l"></script>
 </body>
 </html>

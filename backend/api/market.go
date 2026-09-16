@@ -20,6 +20,7 @@ func (a *API) marketList(w http.ResponseWriter, r *http.Request) error {
 	// 礦區直送: each player has a PRIVATE pool of fair-roll stones, so
 	// nobody can infer where the good stones are by watching others buy.
 	a.restockNPC(uid)
+	a.SettleMarketBots()
 	playerListings, err := a.Store.OpenListings(50)
 	if err != nil {
 		return err
@@ -28,9 +29,58 @@ func (a *API) marketList(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	out := append(publicListings(playerListings), publicListings(pool)...)
-	writeJSON(w, 200, map[string]any{"listings": out})
+	out := append(a.publicListings(playerListings), a.publicListings(pool)...)
+	recent, err := a.Store.RecentBotBuys(6)
+	if err != nil {
+		recent = nil
+	}
+	writeJSON(w, 200, map[string]any{"listings": out, "bot_buys": recent})
 	return nil
+}
+
+// SettleMarketBots: 沒人標的料，讓拍賣 bot 來收。
+//
+// 每隻 bot 有自己放單多久才出手的耐心（Sticky）與出價眼力（Eye × 真值）。
+// 走漏眼的（賭鬼阿明 1.35×）常常出得比真值高；精明的（老周 0.72×）只撿便宜。
+// 賣家照樣拿 95%（扣 5% 手續費），石頭被 bot 收走後不再流通。
+func (a *API) SettleMarketBots() {
+	for _, b := range domain.MarketBots {
+		cands, err := a.Store.StaleListings(b.StickyMins, b.Appetite)
+		if err != nil {
+			continue
+		}
+		for _, c := range cands {
+			st, err := a.Store.GetStone(c.StoneID)
+			if err != nil {
+				continue
+			}
+			if !domain.BotBuys(b, st, c.AskPrice) {
+				continue // 這隻 bot 覺得不值這個價
+			}
+			err = a.Store.WithTx(func(tx *store.Tx) error {
+				if err := a.Store.BuyListingTx(tx, c.ListingID, 0); err != nil {
+					return err
+				}
+				// 賣家收錢（95%，與真人交易同規則）
+				if _, err := tx.Exec(`UPDATE users SET chips = chips + ? WHERE id=?`,
+					c.AskPrice-c.AskPrice/20, c.SellerID); err != nil {
+					return err
+				}
+				if err := a.Store.SetStoneStateTx(tx, c.StoneID, domain.StateSold, 0); err != nil {
+					return err
+				}
+				return a.Store.RecordBotBuyTx(tx, c.StoneID, c.SellerID, b.Key, b.Name, c.AskPrice, domain.BotQuip(b, domain.RandSource))
+			})
+			if err != nil {
+				continue
+			}
+			// 一個 bot 一次只收這麼多件
+			b.Appetite--
+			if b.Appetite <= 0 {
+				break
+			}
+		}
+	}
 }
 
 // npcRestockTarget: how many NPC stones each player's pool keeps.
@@ -81,17 +131,22 @@ const npcIDOffset = 1_000_000_000
 func isNPCID(id int) bool { return id >= npcIDOffset }
 
 // publicListings: 拍賣匿名 — seller identity never leaves the server.
-func publicListings(in []store.Listing) []map[string]any {
+func (a *API) publicListings(in []store.Listing) []map[string]any {
 	out := []map[string]any{}
 	for _, l := range in {
 		pubID := l.ID
 		if l.SellerID == 0 {
 			pubID += npcIDOffset
 		}
+		// 沒打過燈的掛單只有模糊描述（打過燈的賣家才會帶報告）
+		hint := domain.DescribeFreeByGrade(domain.ShopGrade(l.Grade))
+		if a.Store.IsLit(l.StoneID) {
+			hint = l.LightHint
+		}
 		out = append(out, map[string]any{
 			"id": pubID, "stone_id": l.StoneID,
 			"ask_price": l.AskPrice, "grade": l.Grade, "seed": l.Seed,
-			"light_hint": l.LightHint, "window_desc": l.WindowDesc,
+			"light_hint": hint, "lit": a.Store.IsLit(l.StoneID),
 			"npc": l.SellerID == 0,
 		})
 	}
@@ -321,8 +376,9 @@ func (a *API) relief(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	if u.Chips > 0 {
-		return errors.New("你還有籌碼，不需要救濟")
+	// 門檻 5000：籌碼低於 5000 就可以領（2026-09-16 由「歸零」放寬）
+	if u.Chips >= domain.ReliefThreshold {
+		return fmt.Errorf("籌碼還有 %d（%d 以下才能領救濟）", u.Chips, domain.ReliefThreshold)
 	}
 	// 3-hour cooldown between reliefs (relief_used keeps a counter for stats)
 	if u.ReliefAt != "" {

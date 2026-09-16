@@ -19,19 +19,31 @@ const (
 	YBossMaxStake = 1_000_000
 )
 
-// yBossCutRolls: probability table for one cut bet.
-// EV = .30*0 + .30*.6 + .28*1.0 + .10*3.0 + .02*9.5 = 0.95
-// (TestYBossCutEV locks this.)
+// yBossCutRolls: Y佬模式「切一刀」的賠率表——這一組是 Y佬專用，
+// 刻意保留賭性（58% 歸零、1% 帝王綠 ×15），不套用主玩法的 6:4 校準。
+// 玩家看到的就是這張表，賠率與顯示一致。
+// EV = .18*1 + .12*1.5 + .07*3 + .04*5 + .01*15 = 0.92
+// (TestYBossCutEV 鎖住這組數字。)
 var yBossCutRolls = []struct {
 	prob  float64
 	mult  float64
 	label string
 }{
-	{0.30, 0.0, "磚頭料"},
-	{0.30, 0.6, "豆種"},
-	{0.28, 1.0, "油青種"},
-	{0.10, 3.0, "冰種"},
-	{0.02, 9.5, "玻璃種"},
+	{0.58, 0.0, "磚頭料"},
+	{0.18, 1.0, "豆種"},
+	{0.12, 1.5, "糯種"},
+	{0.07, 3.0, "冰種"},
+	{0.04, 5.0, "玻璃種"},
+	{0.01, 15.0, "帝王綠"},
+}
+
+// YBossCutOdds: 給前端顯示的賠率表（單一真相，避免前後端各寫一份）。
+func YBossCutOdds() []map[string]any {
+	out := []map[string]any{}
+	for _, e := range yBossCutRolls {
+		out = append(out, map[string]any{"label": e.label, "prob": e.prob, "mult": e.mult})
+	}
+	return out
 }
 
 // YBossCut resolves one cut bet. Returns (multiplier, label).

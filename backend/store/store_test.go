@@ -24,7 +24,7 @@ func TestUserAndChips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.Chips != 10000 {
+	if u.Chips != domain.SignupChips {
 		t.Fatalf("signup bonus: %d", u.Chips)
 	}
 	got, err := s.GetUserByDiscordID("discord123")
@@ -40,13 +40,13 @@ func TestUserAndChips(t *testing.T) {
 		t.Fatal(err)
 	}
 	got2, _ := s.GetUser(u.ID)
-	if got2.Chips != 5000 {
+	if got2.Chips != domain.SignupChips-5000 {
 		t.Fatalf("after spend: %d", got2.Chips)
 	}
 
 	// cannot go negative
 	err = s.withTx(func(tx *txWrap) error {
-		_, err := UpdateChipsTx(tx, u.ID, -6000)
+		_, err := UpdateChipsTx(tx, u.ID, -(domain.SignupChips - 5000 + 1000))
 		return err
 	})
 	if err != domain.ErrInsufficientChips {

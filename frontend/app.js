@@ -28,8 +28,14 @@ function toast(msg, isGold) {
   setTimeout(() => el.remove(), 2600);
 }
 
+// esc: 使用者輸入（名稱、條件）要 escape 才能進 innerHTML。
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 function setChips(n) {
-  $('#chips').textContent = fmt(n) + ' 籌碼';
+  $('#chips').textContent = fmt(n) + ' 喵喵幣';
   if (me) me.chips = n;
 }
 
@@ -45,7 +51,10 @@ document.querySelectorAll('nav button').forEach(b =>
   b.addEventListener('click', () => {
     show(b.dataset.view);
     ({ shop: loadShop, warehouse: loadWarehouse, market: loadMarket,
-       exchange: loadExchange, collection: loadCollection, ranks: loadRanks })[b.dataset.view]();
+       exchange: () => { loadExchange(); if (typeof loadRewards === 'function') loadRewards(); },
+       collection: loadCollection, ranks: loadRanks,
+       transfer: loadTransfers, admin: loadAdmin, history: loadHistory, bank: loadBank,
+       heist: (typeof loadHeist === 'function' ? loadHeist : loadShop) })[b.dataset.view]();
   }));
 
 
@@ -53,13 +62,13 @@ document.querySelectorAll('nav button').forEach(b =>
 const I18N = {
   'zh-TW': {
     'shop': '商店', 'warehouse': '倉庫', 'market': '競標場', 'exchange': '兌換所',
-    'collection': '圖鑑', 'ranks': '排行榜', 'logout': '登出', 'classic': '傳統模式',
-    'yboss': 'Y佬模式', 'langBtn': '简',
+    'collection': '圖鑑', 'ranks': '排行榜', 'transfer': '轉賬', 'admin': '控制臺', 'history': '紀錄', 'bank': '喵喵錢莊', 'logout': '登出', 'classic': '傳統模式',
+    'yboss': 'Y佬模式', 'heist': '奪寶', 'langBtn': '简',
   },
   'zh-CN': {
     'shop': '商店', 'warehouse': '仓库', 'market': '竞标场', 'exchange': '兑换所',
-    'collection': '图鉴', 'ranks': '排行榜', 'logout': '登出', 'classic': '传统模式',
-    'yboss': 'Y佬模式', 'langBtn': '繁',
+    'collection': '图鉴', 'ranks': '排行榜', 'transfer': '转账', 'admin': '控制台', 'history': '记录', 'bank': '喵喵钱庄', 'logout': '登出', 'classic': '传统模式',
+    'yboss': 'Y佬模式', 'heist': '夺宝', 'langBtn': '繁',
   },
 };
 let LANG = localStorage.getItem('lang') || 'zh-TW';
@@ -67,13 +76,20 @@ function setLang(lang) {
   LANG = lang;
   localStorage.setItem('lang', lang);
   const t = I18N[lang];
-  document.querySelectorAll('nav button[data-view]').forEach(b => { b.textContent = t[b.dataset.view]; });
+  // 字典沒收錄（例如瀏覽器快取了舊 JS）就用按鈕原本的文字，永不變空白
+  document.querySelectorAll('nav button[data-view]').forEach(b => {
+    const label = t[b.dataset.view] || b.dataset.label || b.textContent.trim();
+    if (label) b.dataset.label = label;
+    b.textContent = label || b.dataset.view;
+  });
   const classicBtn = document.getElementById('classic-bet');
   if (classicBtn) classicBtn.textContent = t.classic;
   const yb = document.getElementById('yboss-bet');
   if (yb) yb.textContent = t.yboss;
   const lo = document.getElementById('logout');
   if (lo) lo.textContent = t.logout;
+  const tf = document.querySelector('nav button[data-view="transfer"]');
+  if (tf && !tf.textContent.trim()) tf.textContent = t.transfer || '轉賬';
   const lb = document.getElementById('lang-toggle');
   if (lb) lb.textContent = I18N[lang === 'zh-TW' ? 'zh-CN' : 'zh-TW'].langBtn;
 }
@@ -117,27 +133,47 @@ async function refreshMe() {
   layoutMobileModes();
   if (logged) {
     setChips(me.chips);
-    $('#userbox').textContent = me.username + (me.title ? ` · ${me.title}` : '');
+    // DC 頭像直接讀（OAuth 時存下來的 CDN 連結）＋兌換所的頭像框
+    $('#userbox').innerHTML =
+      `<span class="avatar-ring ${me.frame ? esc(me.frame) : ''}">` +
+      (me.avatar ? `<img src="${esc(me.avatar)}" alt="" referrerpolicy="no-referrer">` : '<span class="ph">🐾</span>') +
+      `</span><span>${(me.title ? `【${esc(me.title)}】` : '') + esc(me.username)}</span>`;
+    // 管理員才看得到控制臺
+    const navAdmin = $('#nav-admin');
+    if (navAdmin) navAdmin.style.display = me.is_admin ? '' : 'none';
     show('shop');
     loadShop();
+    loadEvents();
   } else {
     show('login');
     api('GET', '/api/status').then(st => {
+      // 兩顆按鈕預設都在同一頁顯示，只有後端說沒開才收起來
+      // （以前是先隱藏再顯示，慢一步看起來就像「要點一下才變按鈕」）
       $('#login-discord').style.display = st.discord_oauth ? '' : 'none';
-      if (st.mock_auth) $('#login-mock').style.display = '';
+      $('#login-mock').style.display = st.mock_auth ? '' : 'none';
     }).catch(() => {});
   }
 }
 
 $('#login-discord').addEventListener('click', () => location.href = '/api/auth/discord');
 
-// 公會白名單被擋回來時（?login_error=guild），在登入頁說清楚原因
+// 登入失敗時（?login_error=xxx）在登入頁說清楚原因，而不是丟一個空白頁。
 (function reportLoginError() {
   const q = new URLSearchParams(location.search);
-  if (q.get('login_error') === 'guild') {
-    setTimeout(() => toast('這個 Discord 帳號不在授權的伺服器內，無法登入'), 400);
-    history.replaceState(null, '', location.pathname);
-  }
+  const code = q.get('login_error');
+  if (!code) return;
+  const MSG = {
+    guild: '這個 Discord 帳號不在授權的伺服器內（要加入猪猪岛才能玩）',
+    denied: '你在 Discord 按了拒絕授權',
+    state: '登入連結過期了，再按一次「用 Discord 登入」就好',
+    nocode: 'Discord 沒有回傳授權碼，再試一次',
+    token: 'Discord 授權交換失敗，稍後再試',
+    user: '讀不到你的 Discord 資料，稍後再試',
+    guildcheck: '查不到你的伺服器清單，稍後再試',
+    disabled: '這個站台沒有開啟 Discord 登入',
+  };
+  setTimeout(() => toast(MSG[code] || ('登入失敗：' + code)), 400);
+  history.replaceState(null, '', location.pathname);
 })();
 $('#login-mock').addEventListener('click', async () => {
   try {
@@ -167,7 +203,7 @@ async function loadShop() {
     head.className = 'shelf-head';
     head.innerHTML = `<h3>${g.name}</h3>
       <div class="row">
-        <span class="price-note">下次刷新 ${fmt(g.next_refresh)} 籌碼</span>
+        <span class="price-note">下次刷新 ${fmt(g.next_refresh)} 喵喵幣</span>
         <button class="btn ghost" data-refresh="${g.grade}">刷新貨架</button>
       </div>`;
     sec.appendChild(head);
@@ -198,34 +234,30 @@ function stoneCardEl(item, grade) {
   card.appendChild(cv);
   const price = document.createElement('div');
   price.className = 'price';
-  price.textContent = fmt(item.price) + ' 籌碼';
+  price.textContent = fmt(item.price) + ' 喵喵幣';
   card.appendChild(price);
   const hint = document.createElement('div');
   hint.className = 'hint';
   hint.textContent = item.hint || '';
+  // 蒙頭料沒打燈就什麼描述都沒有（本來就是全盲的）
+  hint.style.display = item.hint ? '' : 'none';
   card.appendChild(hint);
-  if (item.window_desc) {
-    const wd = document.createElement('div');
-    wd.className = 'meta';
-    wd.textContent = '🪟 ' + item.window_desc;
-    card.appendChild(wd);
-  }
   const row = document.createElement('div');
   row.className = 'row';
-  if (grade >= 1) {
-    const light = document.createElement('button');
-    light.className = 'btn ghost';
-    light.textContent = '打燈 ' + fmt(Math.round(item.price / 20));
-    light.addEventListener('click', async () => {
-      try {
-        const res = await api('POST', '/api/shop/light', { stone_id: item.id });
-        hint.textContent = res.report;
-        setChips(res.chips);
-        toast('💡 ' + res.report);
-      } catch (e) { toast(e.message); }
-    });
-    row.appendChild(light);
-  }
+  // 三檔都能打燈：蒙頭→模糊、表現→中等、開窗→準確
+  const light = document.createElement('button');
+  light.className = 'btn ghost';
+  light.textContent = '💡 打燈 ' + fmt(Math.round(item.price / 20));
+  light.addEventListener('click', async () => {
+    try {
+      const res = await api('POST', '/api/shop/light', { stone_id: item.id });
+      hint.textContent = res.report;
+      hint.style.display = '';
+      setChips(res.chips);
+      toast('💡 ' + res.report);
+    } catch (e) { toast(e.message); }
+  });
+  row.appendChild(light);
   const buy = document.createElement('button');
   buy.className = 'btn';
   buy.textContent = '買下';
@@ -263,7 +295,7 @@ async function loadWarehouse() {
     const meta = document.createElement('div');
     meta.className = 'meta';
     meta.textContent = (st.origin === 'classic' ? '傳統石 ' : '') +
-      ['公斤料', '表現料', '開窗料'][st.grade] + ' · ' + fmt(st.price) + ' 籌碼';
+      ['公斤料', '表現料', '開窗料'][st.grade] + ' · ' + fmt(st.price) + ' 喵喵幣';
     card.appendChild(meta);
     const row = document.createElement('div');
     row.className = 'row';
@@ -308,17 +340,20 @@ function showResultModal(title, res, st) {
   const m = document.createElement('div');
   m.className = 'modal';
   const win = res.payout > (st ? st.price : 0);
-  const eggHTML = res.egg === 'bianhe'
+  const eggHTML = gemKey
+    ? `<div class="egg-banner">💎 彩蛋！這一刀切出來的不是玉——是 <b>${esc(res.gem_name || gemKey)}</b>！</div>`
+    : (res.egg === 'bianhe'
     ? '<div class="egg-banner">卞和之石！神仙難斷寸玉，而你賭贏了傳說。</div>'
-    : (res.egg === 'b_fake' ? '<div class="egg-banner">B貨騙局——皮殼表現全是偽裝，酸洗注膠。</div>' : '');
-  const showCutView = res.quality && ['砖头料','豆种','油青种','冰种','玻璃种'].includes(res.quality) && res.variety && res.variety !== '-';
+    : (res.egg === 'b_fake' ? '<div class="egg-banner">B貨騙局——皮殼表現全是偽裝，酸洗注膠。</div>' : ''));
+  const gemKey = res.gem || '';
+  const showCutView = !!gemKey || (res.quality && ['砖头料','豆种','油青种','冰种','玻璃种'].includes(res.quality) && res.variety && res.variety !== '-');
   m.innerHTML = `
     <h3>${title}結果</h3>
     ${eggHTML}
     ${showCutView ? '<canvas id="cut-cv"></canvas>' : ''}
-    <div class="big-result ${win ? 'win' : 'lose'}">${win ? '+' : ''}${fmt(res.payout)} 籌碼</div>
-    <div class="kv"><span>品質</span><b>${res.quality}</b></div>
-    <div class="kv"><span>異色</span><b>${res.variety}</b></div>
+    <div class="big-result ${win ? 'win' : 'lose'}">${win ? '+' : ''}${fmt(res.payout)} 喵喵幣</div>
+    <div class="kv"><span>${gemKey ? '寶石' : '品質'}</span><b>${gemKey ? esc(res.gem_name || gemKey) : res.quality}</b></div>
+    ${gemKey ? '<div class="kv"><span>材質</span><b>不是玉石</b></div>' : `<div class="kv"><span>異色</span><b>${res.variety}</b></div>`}
     <div class="kv"><span>倍率</span><b>×${res.multiplier || (res.mult || '-')}</b></div>
     ${res.first_discovery ? `<div class="egg-banner">🆕 圖鑑新發現：${res.variety}（收藏分 +${res.collection_gain}）</div>` : ''}
     ${res.title_awarded ? `<div class="egg-banner">🏅 獲得稱號：${res.title_awarded}</div>` : ''}
@@ -329,7 +364,7 @@ function showResultModal(title, res, st) {
   document.body.appendChild(bg);
   if (showCutView) {
     const cv = m.querySelector('#cut-cv');
-    StoneRender.cutView(cv, st ? st.seed : res.seed, qualityKey(res.quality), varietyKey(res.variety), { grade: st ? st.grade : 0 });
+    StoneRender.cutView(cv, st ? st.seed : res.seed, gemKey || qualityKey(res.quality), gemKey ? 'base' : varietyKey(res.variety), { grade: st ? st.grade : 0 });
   }
   m.querySelector('#m-close').addEventListener('click', () => bg.remove());
 }
@@ -461,20 +496,44 @@ async function startPolish(st, force) {
   m.innerHTML = `
     <h3>磨石 — ${res.force_name} <span style="font-size:12px;color:var(--muted)">皮殼一寸寸磨掉</span></h3>
     <div class="big-result" id="pol-mult">×${Number(res.multiplier).toFixed(2)}</div>
+    <div class="kv"><span>目前價值</span><b id="pol-value"></b></div>
+    <div class="kv"><span>買入價</span><b>${fmt(st.price)} 喵喵幣</b></div>
+    <div class="kv"><span>賺賠</span><b id="pol-net"></b></div>
     <div class="ladder" id="pol-ladder"></div>
     <div class="kv"><span>下一層爆裂機率</span><b id="pol-risk">${pct(res.break_prob)}</b></div>
+    <div class="kv"><span>磨成下一層</span><b id="pol-next"></b></div>
     <p id="pol-feel" style="font-size:13px;color:var(--gold);margin:10px 0;line-height:1.6">👁 ${res.feel}</p>
     <p style="font-size:12px;color:var(--muted);margin:8px 0">
       開磨即損 7% 皮殼價。力度配得上就磨得順，配不上每層都在賭命——
       <b>手感會告訴你配不配</b>，隨時可以落袋。</p>
     <div class="row" style="margin-top:10px">
       <button class="btn" id="pol-adv">再磨一層</button>
-      <button class="btn danger" id="pol-cash">落袋 ×${Number(res.multiplier).toFixed(2)}</button>
+      <button class="btn danger" id="pol-cash">落袋</button>
       <button class="btn ghost" id="pol-close">離開</button>
     </div>`;
   bg.appendChild(m);
   document.body.appendChild(bg);
   const ladder = m.querySelector('#pol-ladder');
+  // 磨石要看到「實際值多少、賺還是賠」——不然不知道自己在賺還是在賠
+  const paintValue = (mult) => {
+    const v = Math.round(st.price * Number(mult));
+    const net = v - st.price;
+    m.querySelector('#pol-value').textContent = fmt(v) + ' 喵喵幣';
+    const netEl = m.querySelector('#pol-net');
+    netEl.innerHTML = `<span style="color:${net >= 0 ? 'var(--green)' : 'var(--red)'}">${net >= 0 ? '+' : ''}${fmt(net)}</span>`;
+    m.querySelector('#pol-cash').textContent = net >= 0
+      ? `落袋 ${fmt(v)}（賺 ${fmt(net)}）`
+      : `落袋 ${fmt(v)}（賠 ${fmt(-net)}）`;
+  };
+  paintValue(res.multiplier);
+  const paintNext = (mult, top) => {
+    const nextMult = Math.min(Number(mult) * 1.2, top || 99);
+    const nv = Math.round(st.price * nextMult);
+    m.querySelector('#pol-next').innerHTML = top
+      ? `×${nextMult.toFixed(2)} → ${fmt(nv)} 喵喵幣`
+      : `×${nextMult.toFixed(2)} → ${fmt(nv)} 喵喵幣`;
+  };
+  paintNext(res.multiplier, res.ladder && res.ladder.top);
   const paintLadder = (stage) => {
     ladder.innerHTML = '';
     for (let i = 0; i <= 10; i++) {
@@ -490,10 +549,11 @@ async function startPolish(st, force) {
       const rr = await api('POST', '/api/polish/advance', { stone_id: st.id });
       if (rr.alive) {
         m.querySelector('#pol-mult').textContent = '×' + Number(rr.multiplier).toFixed(2);
-        m.querySelector('#pol-cash').textContent = '落袋 ×' + Number(rr.multiplier).toFixed(2);
+        paintValue(rr.multiplier);
         m.querySelector('#pol-risk').textContent = pct(rr.break_prob);
         m.querySelector('#pol-feel').textContent = '👁 ' + rr.feel;
         paintLadder(rr.stage);
+        paintNext(rr.multiplier, res.ladder && res.ladder.top);
         if (rr.at_top) m.querySelector('#pol-adv').disabled = true;
       } else {
         bg.remove();
@@ -515,7 +575,7 @@ async function startPolish(st, force) {
 
 // ---------- market ----------
 async function doList(st) {
-  const price = prompt('掛單價（籌碼）？', String(st.price));
+  const price = prompt('掛單價（喵喵幣）？', String(st.price));
   if (!price) return;
   try {
     const res = await api('POST', '/api/market/list', { stone_id: st.id, ask_price: Number(price) });
@@ -528,6 +588,15 @@ async function loadMarket() {
   const data = await api('GET', '/api/market');
   const wrap = $('#market-list');
   wrap.innerHTML = '';
+  // 拍賣 bot 的收料紀錄（讓玩家知道放久的料有人會收）
+  const botBox = $('#market-bots');
+  if (botBox) {
+    const buys = data.bot_buys || [];
+    botBox.innerHTML = buys.length
+      ? '🤖 最近收料：' + buys.map((b) =>
+          `${b.bot} 收了 ${b.stone_id.slice(0, 8)}（${fmt(b.price)} 喵喵幣）${b.note ? `：「${esc(b.note)}」` : ''}`).join(' · ')
+      : '🤖 放太久的料，拍賣場的收料機器人會來接（走漏眼的出價高，精明的只撿便宜）。';
+  }
   if (!data.listings.length) {
     wrap.innerHTML = '<p style="color:var(--muted);font-size:13px">目前沒有掛單。從倉庫掛一顆試試？</p>';
     return;
@@ -539,11 +608,12 @@ async function loadMarket() {
     card.appendChild(cv);
     const price = document.createElement('div');
     price.className = 'price';
-    price.textContent = fmt(l.ask_price) + ' 籌碼';
+    price.textContent = fmt(l.ask_price) + ' 喵喵幣';
     card.appendChild(price);
     const seller = document.createElement('div');
     seller.className = 'meta';
-    seller.textContent = (l.npc ? '⛏ 礦區直送' : '🕶 匿名賣家') + ' · ' + ['公斤料', '表現料', '開窗料'][l.grade];
+    // 不寫產地（礦區直送／匿名賣家都不揭露），只留檔位
+    seller.textContent = ['公斤料', '表現料', '開窗料'][l.grade];
     card.appendChild(seller);
     const hint = document.createElement('div');
     hint.className = 'hint';
@@ -578,11 +648,11 @@ async function loadExchange() {
     card.innerHTML = `<h3 style="color:var(--gold);font-size:15px">${it.name}
       <span class="badge">${it.kind === 'buff' ? '限時' : it.kind === 'cosmetic' ? '裝飾' : '消耗品'}</span></h3>
       <p style="font-size:13px;color:var(--muted);margin:8px 0">${it.description}</p>
-      <button class="btn">${it.price ? fmt(it.price) + ' 籌碼' : '按石頭計價'}</button>`;
+      <button class="btn">${it.price ? fmt(it.price) + ' 喵喵幣' : '按石頭計價'}</button>`;
     card.querySelector('button').addEventListener('click', async () => {
       try {
         const res = await api('POST', '/api/exchange/buy', { key: it.key });
-        if (res.payouts) toast(`刮到爽！十顆共 +${fmt(res.total)} 籌碼`);
+        if (res.payouts) toast(`刮到爽！十顆共 +${fmt(res.total)} 喵喵幣`);
         else toast('已兌換');
         refreshMe();
         loadExchange();
@@ -597,7 +667,7 @@ $('#relief-chips').addEventListener('click', async () => {
   catch (e) { toast(e.message); }
 });
 $('#relief-ticket').addEventListener('click', async () => {
-  try { const r = await api('POST', '/api/relief', { option: 'ticket' }); toast(`刮到爽 +${fmt(r.total)} 籌碼`); refreshMe(); }
+  try { const r = await api('POST', '/api/relief', { option: 'ticket' }); toast(`刮到爽 +${fmt(r.total)} 喵喵幣`); refreshMe(); }
   catch (e) { toast(e.message); }
 });
 
@@ -622,7 +692,7 @@ async function loadCollection() {
 async function loadRanks() {
   const lb = await api('GET', '/api/leaderboard?kind=wealth');
   const table = $('#rank-table');
-  table.innerHTML = '<tr><th>#</th><th>玩家</th><th>籌碼</th></tr>' +
+  table.innerHTML = '<tr><th>#</th><th>玩家</th><th>喵喵幣</th></tr>' +
     lb.entries.map((e, i) => `<tr><td class="${i === 0 ? 'rank1' : ''}">${i + 1}</td>
       <td>${e.username}</td><td>${fmt(e.score)}</td></tr>`).join('');
   const hall = await api('GET', '/api/hall');
@@ -639,7 +709,7 @@ function varietyName(v) { return ['底色', '紫罗兰', '蓝水', '白底青', 
 
 $('#rank-wealth').addEventListener('click', async () => {
   const lb = await api('GET', '/api/leaderboard?kind=wealth');
-  $('#rank-table').innerHTML = '<tr><th>#</th><th>玩家</th><th>籌碼</th></tr>' +
+  $('#rank-table').innerHTML = '<tr><th>#</th><th>玩家</th><th>喵喵幣</th></tr>' +
     lb.entries.map((e, i) => `<tr><td class="${i === 0 ? 'rank1' : ''}">${i + 1}</td>
       <td>${e.username}</td><td>${fmt(e.score)}</td></tr>`).join('');
   $('#rank-wealth').classList.add('btn'); $('#rank-coll').classList.add('ghost');
@@ -712,6 +782,7 @@ $('#yboss-bet').addEventListener('click', () => {
       <button class="btn" id="yb-cut">切一刀</button>
       <button class="btn danger" id="yb-polish">開始磨石</button>
     </div>
+    <div id="yb-odds" style="margin:10px 0"></div>
     <div id="yb-stage" style="margin-top:12px"></div>
     <p style="font-size:12px;color:var(--muted);margin-top:8px" id="yb-err"></p>`;
   bg.appendChild(m);
@@ -719,6 +790,16 @@ $('#yboss-bet').addEventListener('click', () => {
   bg.addEventListener('click', (ev) => { if (ev.target === bg) bg.remove(); });
   const err = m.querySelector('#yb-err');
   const stage = m.querySelector('#yb-stage');
+  const oddsBox = m.querySelector('#yb-odds');
+  // 賠率表直接由後端來（前後端不會各寫一份）
+  api('GET', '/api/yboss/odds').then((o) => {
+    oddsBox.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--muted)">'
+      + (o.cut || []).map((e) => `<div style="flex:1 1 60px;border-left:2px solid var(--line);padding-left:6px">
+          <div style="color:var(--text)">${esc(e.label)}</div>
+          <div style="color:var(--gold)">×${e.mult}</div>
+          <div>${Math.round(e.prob * 100)}%</div></div>`).join('')
+      + '</div>';
+  }).catch(() => {});
 
   const bet = async (choice) => {
     const stake = Number(m.querySelector('#yb-stake').value);
@@ -731,7 +812,7 @@ $('#yboss-bet').addEventListener('click', () => {
           <div class="big-result ${res.payout > 0 ? 'win' : 'lose'}">${res.label}<br>${res.payout > 0 ? '+' + fmt(res.payout) : '歸零'}</div>
           <div class="kv"><span>倍率</span><b>×${res.mult}</b></div>`;
         const ybcv = stage.querySelector('#yb-cut-cv');
-        if (ybcv && ['磚頭料','豆種','油青種','冰種','玻璃種'].includes(res.label)) {
+        if (ybcv && ['磚頭料','豆種','油青種','糯種','冰種','玻璃種'].includes(res.label)) {
           StoneRender.cutView(ybcv, String(res.rung != null ? res.rung : (Date.now() % 2**53)), qualityKey(res.label), 'base', { grade: 0 });
         } else if (ybcv) {
           ybcv.remove();
@@ -785,3 +866,392 @@ $('#yboss-bet').addEventListener('click', () => {
 });
 
 refreshMe();
+
+// ---------- 轉賬 ----------
+// 不填條件 = 即時到賬；填了條件先扣錢託管，對方接受才入賬（拒絕/取消全額退還）。
+async function loadTransfers() {
+  const d = await api('GET', '/api/transfers');
+  const box = (id, rows, render, empty) => {
+    const el = $(id);
+    if (!el) return;
+    el.innerHTML = rows.length ? rows.map(render).join('')
+      : `<div style="font-size:13px;color:var(--muted)">${empty}</div>`;
+  };
+  box('#tf-incoming', d.incoming || [], (r) => `
+    <div class="card" style="background:rgba(255,255,255,.03);margin-bottom:8px">
+      <div><b>${esc(r.from)}</b> 要轉 <b style="color:var(--gold)">${fmt(r.amount)}</b> 喵喵幣給你</div>
+      ${r.condition ? `<div style="font-size:13px;color:var(--muted);margin:4px 0">條件：${esc(r.condition)}</div>` : ''}
+      <div class="row" style="margin-top:6px">
+        <button class="btn" data-tf-acc="${r.id}">接受</button>
+        <button class="btn ghost" data-tf-dec="${r.id}">拒絕</button>
+      </div>
+    </div>`, '目前沒人轉喵喵幣給你。');
+  box('#tf-outgoing', d.outgoing || [], (r) => `
+    <div class="card" style="background:rgba(255,255,255,.03);margin-bottom:8px">
+      <div>等 <b>${esc(r.to)}</b> 接受：<b style="color:var(--gold)">${fmt(r.amount)}</b> 喵喵幣</div>
+      ${r.condition ? `<div style="font-size:13px;color:var(--muted);margin:4px 0">條件：${esc(r.condition)}</div>` : ''}
+      <div class="row" style="margin-top:6px"><button class="btn ghost" data-tf-can="${r.id}">取消並取回</button></div>
+    </div>`, '沒有等待中的轉賬。');
+  box('#tf-history', d.history || [], (r) => {
+    const st = { sent: '已到賬', accepted: '已接受', declined: '被拒絕', cancelled: '已取消' }[r.status] || r.status;
+    return `<div style="font-size:13px;padding:4px 0;border-bottom:1px solid var(--border)">
+      ${esc(r.from)} → ${esc(r.to)} · ${fmt(r.amount)} 喵喵幣 · <span style="color:var(--muted)">${st}</span>
+      ${r.condition ? `<span style="color:var(--muted)"> · 條件：${esc(r.condition)}</span>` : ''}</div>`;
+  }, '還沒有紀錄。');
+
+  document.querySelectorAll('[data-tf-acc]').forEach((b) => b.onclick = () => tfAct('accept', +b.dataset.tfAcc));
+  document.querySelectorAll('[data-tf-dec]').forEach((b) => b.onclick = () => tfAct('decline', +b.dataset.tfDec));
+  document.querySelectorAll('[data-tf-can]').forEach((b) => b.onclick = () => tfAct('cancel', +b.dataset.tfCan));
+}
+
+async function tfAct(kind, id) {
+  try {
+    const r = await api('POST', '/api/transfer/' + kind, { id });
+    if (r.chips !== undefined) setChips(r.chips);
+    toast(r.message || '完成', true);
+    await loadTransfers();
+  } catch (e) { toast(e.message); }
+}
+
+const tfSend = document.getElementById('tf-send');
+if (tfSend) tfSend.onclick = async () => {
+  const to = $('#tf-to').value.trim();
+  const amount = parseInt($('#tf-amount').value, 10);
+  const condition = $('#tf-cond').value.trim();
+  if (!to) return toast('請填對方名稱');
+  if (!(amount > 0)) return toast('金額要大於 0');
+  if (condition) {
+    const ok = confirm(`附帶條件：\n「${condition}」\n\n先扣 ${fmt(amount)} 喵喵幣託管，等 ${to} 接受才成交。確定送出？`);
+    if (!ok) return;
+  }
+  try {
+    const r = await api('POST', '/api/transfer', { to, amount, condition });
+    if (r.chips !== undefined) setChips(r.chips);
+    $('#tf-to').value = ''; $('#tf-amount').value = ''; $('#tf-cond').value = '';
+    toast(r.message || '已送出', true);
+    await loadTransfers();
+  } catch (e) { toast(e.message); }
+};
+
+
+// ---------- 活動公告 ----------
+async function loadEvents() {
+  const box = $('#event-banner');
+  if (!box) return;
+  try {
+    const d = await api('GET', '/api/events');
+    const evs = d.events || [];
+    box.innerHTML = evs.map((e) => `
+      <div class="card" style="margin-bottom:12px;border-color:var(--gold)">
+        <b style="color:var(--gold)">📣 ${esc(e.title)}</b>
+        <span style="font-size:12px;color:var(--muted)"> · 剩 ${e.hours_left} 小時</span>
+        ${e.body ? `<div style="font-size:13px;margin-top:6px;white-space:pre-wrap">${esc(e.body)}</div>` : ''}
+      </div>`).join('');
+  } catch { box.innerHTML = ''; }
+}
+
+// ---------- 管理員控制臺 ----------
+let HIDE_MOCK = localStorage.getItem('hide_mock') === '1';
+// 安全寫入：元素不存在也不要讓整段渲染炸掉（列表消失的真兇）
+const putHTML = (sel, html) => { const el = $(sel); if (el) el.innerHTML = html; else console.warn('缺元素', sel); };
+const putText = (sel, txt) => { const el = $(sel); if (el) el.textContent = txt; else console.warn('缺元素', sel); };
+async function loadAdmin() {
+  let d = {};
+  try {
+    d = await api('GET', '/api/admin/panel');
+  } catch (e) {
+    putHTML('#ad-players', `<div style="color:var(--muted)">控制臺載入失敗：${esc(String(e))}</div>`);
+    return;
+  }
+  const s = d.stats || {};
+  if (d.error) {
+    putHTML('#ad-players', `<div style="color:var(--muted)">控制臺載入失敗：${esc(d.error)}</div>`);
+    return;
+  }
+  putHTML('#admin-stats', [
+    ['玩家總數', s.players], ['真人玩家', s.real_players], ['喵喵幣總量', fmt(s.total_chips)],
+    ['倉庫石頭', s.stones_owned], ['已切過', s.stones_cut], ['市場掛單', s.listings_open],
+    ['bot 收料（累計／24h）', `${s.bot_buys} / ${s.bot_buys_24h}`],
+    ['磨石進行中', s.polish_running], ['待接受轉賬', s.transfers_open],
+  ].map(([k, v]) => `<div>${k}：<b style="color:var(--text)">${v}</b></div>`).join(''));
+
+  if (typeof loadAdminRewards === 'function') loadAdminRewards();
+  const all = d.players || [];
+  const players = all.filter((p) => !HIDE_MOCK || !p.is_mock);
+  const total = (d.stats || {}).players || all.length;
+  const mockCount = all.filter((p) => p.is_mock).length;
+  putText('#ad-players-title',
+    `玩家（全部 ${total} 個帳號${HIDE_MOCK ? `，已隱藏 ${mockCount} 個測試帳號` : ''}，依喵喵幣排序）`);
+  putHTML('#ad-players', players.length ? players.map((p) => `
+    <div style="display:flex;gap:8px;align-items:center;padding:3px 0;border-bottom:1px solid var(--border)">
+      <span style="flex:1">${p.is_admin ? '👑 ' : ''}${esc(p.name)}${p.is_mock ? ' <span style="color:var(--muted)">(測試)</span>' : ''}</span>
+      <span style="width:90px;text-align:right;color:var(--gold)">${fmt(p.chips)}</span>
+      <span style="width:60px;text-align:right;color:var(--muted)">${p.stones} 石</span>
+    </div>`).join('') : `<div style="color:var(--muted)">沒有玩家（全部帳號都被隱藏？按「隱藏測試帳號」切換看看）</div>`);
+
+  $('#ad-events').innerHTML = (d.events || []).map((e) => `
+    <div style="display:flex;gap:8px;align-items:center;padding:4px 0">
+      <span style="flex:1"><b>${esc(e.title)}</b><span style="color:var(--muted);font-size:12px"> · 剩 ${e.hours_left}h</span></span>
+      <button class="btn ghost" data-ev-del="${e.id}">下架</button>
+    </div>`).join('') || '<div style="font-size:13px;color:var(--muted)">目前沒有活動</div>';
+
+  $('#ad-bots').innerHTML = (d.bots || []).map((b) =>
+    `<div>${esc(b.name)}：眼力 <b>${b.eye}×</b>真值 · 放 ${b.sticky_mins >= 60 ? (b.sticky_mins / 60) + ' 小時' : (b.sticky_mins ?? b.sticky_hours * 60 ?? '?') + ' 分鐘'} 後出手 · 每次最多 ${b.appetite} 件</div>`).join('');
+
+  $('#ad-mydiscord').textContent =
+    `你的 Discord ID：${d.my_discord_id || '（未取得）'}　—　填進 .env 的 ADMIN_DISCORD_IDS 可以固定管理員身分`;
+
+  document.querySelectorAll('[data-ev-del]').forEach((b) => b.onclick = async () => {
+    try { await api('POST', '/api/admin/event/delete', { id: +b.dataset.evDel }); toast('已下架', true); loadAdmin(); loadEvents(); }
+    catch (e) { toast(e.message); }
+  });
+}
+
+async function adminAct(path, body, okMsg) {
+  try {
+    const r = await api('POST', path, body);
+    toast(r.message || okMsg, true);
+    if (r.chips !== undefined && me) setChips(me.chips);
+    loadAdmin(); loadEvents(); refreshMe();
+  } catch (e) { toast(e.message); }
+}
+
+const adGrant = document.getElementById('ad-grant');
+if (adGrant) adGrant.onclick = () => {
+  const user = $('#ad-user').value.trim();
+  const amount = parseInt($('#ad-amount').value, 10);
+  if (!user || !amount) return toast('要填玩家名稱和金額');
+  const verb = amount > 0 ? '發' : '收回';
+  if (!confirm(`${verb} ${fmt(Math.abs(amount))} 喵喵幣 ${amount > 0 ? '給' : '從'} ${user}？`)) return;
+  adminAct('/api/admin/grant', { user, amount, reason: $('#ad-reason').value.trim() }, '已調整');
+};
+const adAll = document.getElementById('ad-giveall');
+if (adAll) adAll.onclick = () => {
+  const amount = parseInt($('#ad-all').value, 10);
+  if (!(amount > 0)) return toast('紅包金額要大於 0');
+  if (!confirm(`全服每人發 ${fmt(amount)} 喵喵幣？`)) return;
+  adminAct('/api/admin/giveall', { amount, reason: '全服紅包' }, '已發紅包');
+};
+const adPub = document.getElementById('ad-ev-pub');
+if (adPub) adPub.onclick = () => {
+  const title = $('#ad-ev-title').value.trim();
+  if (!title) return toast('活動要有標題');
+  adminAct('/api/admin/event', {
+    title,
+    body: $('#ad-ev-body').value.trim(),
+    hours: parseInt($('#ad-ev-hours').value, 10) || 24,
+    amount: parseInt($('#ad-ev-amount').value, 10) || 0,
+  }, '已發佈').then(() => {
+    $('#ad-ev-title').value = ''; $('#ad-ev-body').value = '';
+    $('#ad-ev-hours').value = ''; $('#ad-ev-amount').value = '';
+  });
+};
+const adHide = document.getElementById('ad-hide-mock');
+if (adHide) {
+  const paint = () => { adHide.textContent = HIDE_MOCK ? '顯示測試帳號' : '隱藏測試帳號'; };
+  paint();
+  adHide.onclick = () => {
+    HIDE_MOCK = !HIDE_MOCK;
+    localStorage.setItem('hide_mock', HIDE_MOCK ? '1' : '0');
+    paint();
+    loadAdmin();
+  };
+}
+
+const adCleanup = document.getElementById('ad-cleanup');
+if (adCleanup) adCleanup.onclick = () => {
+  if (!confirm('清掉所有 mock: 測試帳號（他們手上的石頭也會消失）？')) return;
+  adminAct('/api/admin/cleanup', {}, '已清理');
+};
+
+
+// ---------- 我的紀錄 ----------
+async function loadHistory() {
+  loadTitles().catch(() => {});
+  const d = await api('GET', '/api/history');
+  const s = d.stats || {};
+  const net = s.net || 0;
+  $('#hist-stats').innerHTML = [
+    ['處理過的總數', s.total],
+    ['切石次數', s.cuts],
+    ['勝率（拿回本錢以上）', (s.win_rate || 0) + '%'],
+    ['總花費', fmt(s.spent)],
+    ['總回收', fmt(s.earned)],
+    ['淨賺賠', `<b style="color:${net >= 0 ? 'var(--green)' : 'var(--red)'}">${net >= 0 ? '+' : ''}${fmt(net)}</b>`],
+    ['最佳倍率', ((s.best_mult || 0) / 100).toFixed(2) + '×'],
+  ].map(([k, v]) => `<div>${k}：<b style="color:var(--text)">${v}</b></div>`).join('');
+
+  const ACT = { cut: '切開', scratch: '刮開', polish: '磨到落袋', sold: '賣掉' };
+  const list = $('#hist-list');
+  if (!(d.entries || []).length) {
+    list.innerHTML = '<div style="color:var(--muted)">還沒有紀錄——去切一顆石頭吧。</div>';
+    return;
+  }
+  list.innerHTML = d.entries.map((e) => {
+    const mult = e.price > 0 ? e.payout / e.price : 0;
+    const good = e.payout >= e.price;
+    return `<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
+      <span style="flex:0 0 78px;color:var(--muted)">${e.created_at.slice(5, 16)}</span>
+      <span style="flex:0 0 62px">${ACT[e.action] || e.action}</span>
+      <span style="flex:1">${esc(e.quality)}${e.variety ? ' · ' + esc(e.variety) : ''}
+        <span style="color:var(--muted);font-size:12px">（${esc(e.stone_id.slice(0, 8))}）</span></span>
+      <span style="flex:0 0 150px;text-align:right">${fmt(e.price)} → <b style="color:${good ? 'var(--green)' : 'var(--red)'}">${fmt(e.payout)}</b>
+        <span style="color:var(--muted)">${mult.toFixed(2)}×</span></span>
+    </div>`;
+  }).join('');
+}
+
+
+// ---------- 稱號 ----------
+const TITLE_RARE = { 1: 'var(--muted)', 2: 'var(--text)', 3: 'var(--gold)', 4: '#e8b3ff' };
+
+async function loadTitles() {
+  const box = $('#title-grid');
+  if (!box) return;
+  const d = await api('GET', '/api/titles');
+  box.innerHTML = (d.titles || []).map((t) => {
+    const col = TITLE_RARE[t.rare] || 'var(--text)';
+    const border = t.equipped ? 'var(--gold)' : 'var(--border)';
+    return `<div class="card" style="background:rgba(255,255,255,.03);border-color:${border};padding:10px">
+      <div style="color:${col};font-weight:700">${t.unlocked ? '' : '🔒 '}${esc(t.name)}</div>
+      <div style="font-size:12px;color:var(--muted);margin:4px 0 8px">${esc(t.desc)}</div>
+      ${t.unlocked
+        ? (t.equipped
+          ? '<button class="btn ghost" data-title-off="1" style="width:100%">卸下</button>'
+          : `<button class="btn" data-title="${esc(t.key)}" style="width:100%">裝上</button>`)
+        : '<button class="btn ghost" disabled style="width:100%">未解鎖</button>'}
+    </div>`;
+  }).join('');
+  document.querySelectorAll('[data-title]').forEach((b) => b.onclick = async () => {
+    try { const r = await api('POST', '/api/titles/equip', { key: b.dataset.title }); toast(r.message, true); await refreshMe(); loadTitles(); }
+    catch (e) { toast(e.message); }
+  });
+  const off = document.querySelector('[data-title-off]');
+  if (off) off.onclick = async () => {
+    try { await api('POST', '/api/titles/equip', { key: '' }); toast('已卸下稱號'); await refreshMe(); loadTitles(); }
+    catch (e) { toast(e.message); }
+  };
+}
+
+
+// ---------- 喵喵錢莊 ----------
+function bankRow(k, v) {
+  return `<tr><td style="padding:3px 0;color:var(--muted);width:130px">${k}</td><td>${v}</td></tr>`;
+}
+
+async function loadBank() {
+  const d = await api('GET', '/api/bank');
+  const t = d.terms || {};
+  $('#bank-terms').innerHTML = [
+    bankRow('借貸範圍', `${fmt(t.min)} ~ ${fmt(t.max)} 喵喵幣`),
+    bankRow('還款期限', `${t.min_hours} ~ ${t.max_hours} 小時（現實時間，最多一天）`),
+    bankRow('逾期', `沒收 <b style="color:var(--red)">一半財產</b>`),
+    bankRow('申訴', `${t.max_appeal} 輪（被拒絕才可以申訴）`),
+    bankRow('AI', t.ai ? '已接上（貓娘在線）' : '未設定金鑰，暫用基本審核'),
+  ].join('');
+
+  // 提議：等玩家按「接受」或「拒絕」
+  const off = d.offer;
+  const offerEl = document.getElementById('bank-offer');
+  // 沒提議／沒東西可申訴就把整個卡片收起來（不要留空殼）
+  if (offerEl) offerEl.style.display = off ? '' : 'none';
+  const appealCard = document.getElementById('bank-appeal-card');
+  const canAppeal = !!(off || (d.loan === null && (d.history || []).some((h) => h.status === 'denied')));
+  if (appealCard) appealCard.style.display = (off || d.loan) ? '' : (canAppeal ? '' : 'none');
+  if (offerEl) {
+    offerEl.innerHTML = off ? `
+      <h3 style="color:var(--gold);margin-bottom:8px">老闆娘的提議</h3>
+      <table style="width:100%;font-size:13px">
+        ${bankRow('金額', fmt(off.principal) + ' 喵喵幣')}
+        ${bankRow('利率', ((off.rate || 0.25) * 100).toFixed(0) + '%')}
+        ${bankRow('到期日（現實時間）', `${off.hours} 小時後`)}
+        ${bankRow('到期要還', `<b style="color:var(--gold)">${fmt(off.principal + off.interest)}</b>`)}
+      </table>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="bk-accept">接受</button>
+        <button class="btn ghost" id="bk-reject">拒絕</button>
+      </div>` : '';
+    const acc = document.getElementById('bk-accept');
+    if (acc) acc.onclick = async () => {
+      try { const r = await api('POST', '/api/bank/accept', {}); toast(r.message, true); setChips(r.chips); loadBank(); }
+      catch (e) { toast(e.message); }
+    };
+    const rej = document.getElementById('bk-reject');
+    if (rej) rej.onclick = async () => {
+      try { const r = await api('POST', '/api/bank/reject', {}); toast(r.message); loadBank(); }
+      catch (e) { toast(e.message); }
+    };
+  }
+
+  const l = d.loan;
+  $('#bank-current').innerHTML = l
+    ? `<h3 style="color:var(--gold);margin-bottom:8px">目前貸款</h3>
+       <table style="width:100%;font-size:13px">
+         ${bankRow('本金', fmt(l.principal))}
+         ${bankRow('利息', `${fmt(l.interest)}（${(l.rate ? l.rate * 100 : 25).toFixed(0)}%）`)}
+         ${l.penalty ? bankRow('違約金', `<b style="color:var(--red)">${fmt(l.penalty)}</b>`) : ''}
+         ${bankRow('到期要還', `<b style="color:var(--gold)">${fmt(d.repay_total)}</b>`)}
+         ${bankRow('到期時間（UTC）', l.due_at)}
+         ${bankRow('已申訴', `${l.appeals} / ${t.max_appeal} 輪`)}
+       </table>
+       <div class="row" style="margin-top:10px"><button class="btn" id="bk-repay">還清 ${fmt(d.repay_total)}</button></div>`
+    : '<div style="font-size:13px;color:var(--muted)">目前沒有欠錢喵。</div>';
+  const rp = document.getElementById('bk-repay');
+  if (rp) rp.onclick = async () => {
+    if (!confirm('確定還清？')) return;
+    try { const r = await api('POST', '/api/bank/repay', {}); toast(r.message, true); setChips(r.chips); loadBank(); }
+    catch (e) { toast(e.message); }
+  };
+
+  const chat = (d.chat || []);
+  // 對話框形式：老闆娘在左（貓娘頭像），玩家在右
+  const bubble = (role, text) => role === 'banker'
+    ? `<div class="chat-row them"><div class="chat-av">🐱</div>
+         <div><div class="chat-name">喵喵老闆娘</div><div class="chat-bubble">${esc(text)}</div></div></div>`
+    : `<div class="chat-row me"><div class="chat-av">🙋</div>
+         <div><div class="chat-name" style="text-align:right">你</div><div class="chat-bubble">${esc(text)}</div></div></div>`;
+  $('#bk-chat').innerHTML = chat.length
+    ? chat.map((m) => bubble(m.role, m.content)).join('')
+    : bubble('banker', d.greeting || '歡迎光臨喵喵錢莊喵～');
+
+  $('#bank-history').innerHTML = (d.history || []).length
+    ? '<tr><th align="left">本金</th><th align="left">利息</th><th align="left">時數</th><th align="left">狀態</th></tr>'
+      + d.history.map((h) => `<tr><td>${fmt(h.principal)}</td><td>${fmt(h.interest)}</td><td>${h.hours}h</td>
+          <td>${({ repaid: '已還清', active: '進行中', defaulted: '逾期沒收' })[h.status] || h.status}</td></tr>`).join('')
+    : '<tr><td style="color:var(--muted)">還沒有紀錄</td></tr>';
+
+  const est = () => {
+    const amt = parseInt($('#bk-amount').value, 10) || 0;
+    const hrs = parseInt($('#bk-hours').value, 10) || 0;
+    if (!amt) { $('#bk-est').textContent = ''; return; }
+    const rate = Math.min(Math.max((parseFloat($('#bk-rate')?.value) || 30) / 100, 0.05), 0.60);
+    $('#bk-est').textContent = `到期要還 ${fmt(Math.round(amt * (1 + rate)))}`;
+  };
+  ['#bk-amount', '#bk-hours', '#bk-rate'].forEach((s) => { const el = $(s); if (el) el.oninput = est; });
+  est();
+  const ap = document.getElementById('bk-apply');
+  if (ap) ap.onclick = async () => {
+    try {
+      const r = await api('POST', '/api/bank/apply', {
+        amount: parseInt($('#bk-amount').value, 10) || 0,
+        hours: parseInt($('#bk-hours').value, 10) || 0,
+        reason: $('#bk-reason').value.trim(),
+        rate: (parseFloat($('#bk-rate')?.value) || 30) / 100,
+      });
+      toast(r.message, r.decision !== 'deny');
+      if (r.chips !== undefined) setChips(r.chips);
+      loadBank();
+    } catch (e) { toast(e.message); }
+  };
+  const sd = document.getElementById('bk-send');
+  if (sd) sd.onclick = async () => {
+    const msg = $('#bk-say').value.trim();
+    if (!msg) return;
+    try {
+      const r = await api('POST', '/api/bank/appeal', { message: msg });
+      $('#bk-say').value = '';
+      toast(r.message, true);
+      loadBank();
+    } catch (e) { toast(e.message); }
+  };
+}

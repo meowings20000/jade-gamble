@@ -20,7 +20,8 @@ func (a *API) shopView(w http.ResponseWriter, r *http.Request) error {
 	if !ok {
 		return nil
 	}
-	if err := a.Store.EnsureShelf(uid, today()); err != nil {
+	newDay, err := a.Store.EnsureShelf(uid, today())
+	if err != nil {
 		return err
 	}
 	u, err := a.Store.GetUser(uid)
@@ -34,8 +35,9 @@ func (a *API) shopView(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return err
 		}
-		// auto-fill empty slots on first view of the day
-		if len(ids) < domain.ShelfSize(g) {
+		// 只有跨日（每日免費補貨）才補滿；單純開頁／跳頁不會生新石頭。
+		// 以前這裡是「看到空格就補」，等於買走一格、跳個頁就免費多一顆。
+		if newDay && len(ids) < domain.ShelfSize(g) {
 			for len(ids) < domain.ShelfSize(g) {
 				st := domain.GenerateStone(g, domain.RandSource)
 				st.OwnerID = uid
@@ -55,7 +57,7 @@ func (a *API) shopView(w http.ResponseWriter, r *http.Request) error {
 			if err != nil {
 				return err
 			}
-			items = append(items, stoneCard(st))
+			items = append(items, stoneCardLit(st, a.Store.IsLit(st.ID)))
 		}
 		refreshes, _ := a.Store.CountShelfRefreshes(uid, g, today())
 		grades = append(grades, map[string]any{
@@ -70,20 +72,20 @@ func (a *API) shopView(w http.ResponseWriter, r *http.Request) error {
 
 // stoneCard is the public view of an unopened stone.
 func stoneCard(st *domain.Stone) map[string]any {
-	card := map[string]any{
+	return stoneCardLit(st, false)
+}
+
+// stoneCardLit: 沒打燈只給「肉眼可見的」描述（蒙頭料什麼都沒有），
+// 付費打過燈才給報告（蒙頭模糊、表現中等、開窗準確）。
+func stoneCardLit(st *domain.Stone, lit bool) map[string]any {
+	hint := domain.DescribeFree(st)
+	if lit {
+		hint = st.LightHint
+	}
+	return map[string]any{
 		"id": st.ID, "seed": seedStr(st.Seed), "grade": int(st.Grade), "price": st.Price,
-		"hint": st.LightHint,
+		"lit": lit, "hint": hint,
 	}
-	if st.Grade == domain.WindowGrade {
-		// window stones show their window colour honestly
-		card["window_shown"] = true
-		if st.InkHidden {
-			card["window_desc"] = "窗面死黑，光都进不去——像是块废料"
-		} else {
-			card["window_desc"] = windowDesc(st)
-		}
-	}
-	return card
 }
 
 func windowDesc(st *domain.Stone) string {
@@ -118,7 +120,7 @@ func (a *API) shopRefresh(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("未知档位")
 	}
 	// shelves rows must exist before we can clear/fill them
-	if err := a.Store.EnsureShelf(uid, today()); err != nil {
+	if _, err := a.Store.EnsureShelf(uid, today()); err != nil {
 		return err
 	}
 	refreshes, err := a.Store.CountShelfRefreshes(uid, g, today())
@@ -228,9 +230,7 @@ func (a *API) shopLightReport(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return store.ErrNotFound
 	}
-	if st.Grade == domain.KiloGrade {
-		return fmt.Errorf("公斤料没有可打的窗")
-	}
+	// 公斤料也能打燈：蒙頭料打燈只有模糊描述（見 buildBlindHint）。
 	cost := st.Price / 20 // 5%
 	hasMaster, _ := a.Store.HasActiveBuff(uid, "light_master", nowUTC())
 	if hasMaster {
@@ -244,6 +244,9 @@ func (a *API) shopLightReport(w http.ResponseWriter, r *http.Request) error {
 	}); err != nil {
 		return err
 	}
-	writeJSON(w, 200, map[string]any{"report": st.LightHint, "chips": bal})
+	if err := a.Store.MarkLit(st.ID, uid); err != nil {
+		return err
+	}
+	writeJSON(w, 200, map[string]any{"report": st.LightHint, "chips": bal, "cost": cost})
 	return nil
 }

@@ -38,6 +38,15 @@ func CutReveal(s *Stone, doubleCoupon bool) (payout int) {
 	return payout
 }
 
+// CutRevealWithGem: 正式切石流程——先擲隱藏彩蛋（5% 寶石），沒中就正常結算。
+// 舊的 CutReveal 保持「不含彩蛋」的純計算，讓既有測試與定價邏輯穩定。
+func CutRevealWithGem(s *Stone, doubleCoupon bool, r Rand) (payout int, gem *Gem) {
+	if g, ok := RollGem(r); ok {
+		return GemPayout(s, g, doubleCoupon), &g
+	}
+	return CutReveal(s, doubleCoupon), nil
+}
+
 // Redemption catalog (兌換所). EV of every consumable is below its price.
 type ExchangeItem struct {
 	Key         string
@@ -79,9 +88,14 @@ func ExchangeItemByKey(key string) (ExchangeItem, bool) {
 func FrenzyTicketPayout(r Rand) int { return 1 + r.Intn(100) }
 
 // BankruptcyRelief options.
+// SignupChips: 開局籌碼（2026-09-16 由 1 萬提高到 5 萬）。
+const SignupChips = 50000
+
 const (
-	ReliefChips    = 1000
-	ReliefAltChips = 300
+	// ReliefThreshold: 籌碼低於此數即可領救濟。
+	ReliefThreshold = 5000
+	ReliefChips     = 1000
+	ReliefAltChips  = 300
 )
 
 // DailyAllowance: chips granted on a brand-new day (loyalty drip).

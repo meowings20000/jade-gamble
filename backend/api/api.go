@@ -21,6 +21,13 @@ type API struct {
 	DiscordGuildID string
 	// MockAuth enables the test-only mock Discord flow (default off in prod).
 	MockAuth bool
+	// AdminDiscordIDs: .env ADMIN_DISCORD_IDS 的管理員 Discord ID 名單。
+	AdminDiscordIDs []string
+	// 喵喵錢莊的 AI（DeepSeek 等 OpenAI 相容端點）——只從後端環境變數來，
+	// 前端不碰金鑰，.env 已被 gitignore。
+	AIBaseURL string
+	AIAPIKey  string
+	AIModel   string
 }
 
 // routes registers everything on a mux.
@@ -59,11 +66,45 @@ func (a *API) Routes() *http.ServeMux {
 	mux.HandleFunc("POST /api/market/buy", a.handler(a.marketBuy))
 
 	mux.HandleFunc("POST /api/classic/bet", a.handler(a.classicBet))
+	mux.HandleFunc("GET /api/yboss/odds", a.handler(a.ybossOdds))
 	mux.HandleFunc("POST /api/yboss/bet", a.handler(a.ybossBet))
 	mux.HandleFunc("POST /api/yboss/polish", a.handler(a.ybossPolish))
 	mux.HandleFunc("GET /api/exchange", a.handler(a.exchangeView))
 	mux.HandleFunc("POST /api/exchange/buy", a.handler(a.exchangeBuy))
 	mux.HandleFunc("POST /api/relief", a.handler(a.relief))
+
+	// 活動公告（全體可見）與管理員控制臺
+	mux.HandleFunc("GET /api/events", a.handler(a.events))
+	mux.HandleFunc("GET /api/history", a.handler(a.history))
+	mux.HandleFunc("GET /api/titles", a.handler(a.titles))
+	mux.HandleFunc("GET /api/bank", a.handler(a.bank))
+	mux.HandleFunc("POST /api/bank/apply", a.handler(a.bankApply))
+	mux.HandleFunc("POST /api/bank/appeal", a.handler(a.bankAppeal))
+	mux.HandleFunc("POST /api/bank/repay", a.handler(a.bankRepay))
+	mux.HandleFunc("POST /api/bank/accept", a.handler(a.bankAccept))
+	mux.HandleFunc("POST /api/bank/reject", a.handler(a.bankReject))
+	mux.HandleFunc("GET /api/rewards", a.handler(a.rewardsList))
+	mux.HandleFunc("POST /api/rewards/request", a.handler(a.rewardsRequest))
+	mux.HandleFunc("GET /api/admin/rewards", a.handler(a.adminRewards))
+	mux.HandleFunc("POST /api/admin/rewards/decide", a.handler(a.adminRewardDecide))
+	mux.HandleFunc("GET /api/heist", a.handler(a.heistState))
+	mux.HandleFunc("POST /api/heist/join", a.handler(a.heistJoin))
+	mux.HandleFunc("POST /api/heist/fill", a.handler(a.heistFill))
+	mux.HandleFunc("POST /api/heist/act", a.handler(a.heistAct))
+	mux.HandleFunc("POST /api/heist/leave", a.handler(a.heistLeave))
+	mux.HandleFunc("POST /api/titles/equip", a.handler(a.equipTitle))
+	mux.HandleFunc("GET /api/admin/panel", a.handler(a.adminPanel))
+	mux.HandleFunc("POST /api/admin/grant", a.handler(a.adminGrant))
+	mux.HandleFunc("POST /api/admin/giveall", a.handler(a.adminGiveAll))
+	mux.HandleFunc("POST /api/admin/event", a.handler(a.adminEvent))
+	mux.HandleFunc("POST /api/admin/event/delete", a.handler(a.adminEventDelete))
+	mux.HandleFunc("POST /api/admin/cleanup", a.handler(a.adminCleanup))
+
+	mux.HandleFunc("POST /api/transfer", a.handler(a.transferSend))
+	mux.HandleFunc("GET /api/transfers", a.handler(a.transfers))
+	mux.HandleFunc("POST /api/transfer/accept", a.handler(a.transferAccept))
+	mux.HandleFunc("POST /api/transfer/decline", a.handler(a.transferDecline))
+	mux.HandleFunc("POST /api/transfer/cancel", a.handler(a.transferCancel))
 
 	mux.HandleFunc("GET /api/leaderboard", a.handler(a.leaderboard))
 	mux.HandleFunc("GET /api/collection", a.handler(a.collection))
@@ -132,6 +173,8 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) error {
 		"id": u.ID, "username": u.Username, "avatar": u.Avatar,
 		"chips": u.Chips, "collection_score": u.CollectionScore, "title": u.Title,
 		"items": items, "discovered": varieties,
+		"is_admin": a.isAdmin(uid), "discord_id": u.DiscordID,
+		"frame": a.Store.EquippedFrame(uid),
 	})
 	return nil
 }

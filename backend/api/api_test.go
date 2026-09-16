@@ -95,7 +95,7 @@ func TestFullFlow(t *testing.T) {
 
 	// me: signup bonus
 	me := c.do("GET", "/api/me", nil)
-	if me["chips"].(float64) != 10000 {
+	if me["chips"].(float64) != 50000 {
 		t.Fatalf("signup chips: %v", me["chips"])
 	}
 
@@ -122,7 +122,7 @@ func TestFullFlow(t *testing.T) {
 	stoneID := first["id"].(string)
 	price := int(first["price"].(float64))
 	buy := c.do("POST", "/api/shop/buy", map[string]string{"stone_id": stoneID})
-	if buy["chips"].(float64) != float64(10000-price) {
+	if buy["chips"].(float64) != float64(50000-price) {
 		t.Fatalf("buy chips: %v", buy["chips"])
 	}
 	// double-buy must fail (stone removed from shelf)
@@ -323,38 +323,35 @@ func TestExchangeAndLeaderboard(t *testing.T) {
 func TestRelief(t *testing.T) {
 	srv, _ := setup(t)
 	c := newClient(t, srv, "eve")
+	newClient(t, srv, "eve_sink") // 收錢的帳號（只是為了把 eve 掏空）
 
-	// drain chips by buying the most expensive shelf stones repeatedly
-	for i := 0; i < 30; i++ {
-		shop := c.do("GET", "/api/shop", nil)
-		grades := shop["grades"].([]any)
-		// buy window grade (most expensive)
-		wg := grades[2].(map[string]any)
-		items := wg["items"].([]any)
-		if len(items) == 0 {
-			continue
-		}
-		sid := items[0].(map[string]any)["id"].(string)
-		if _, err := post(c, "/api/shop/buy", map[string]string{"stone_id": sid}); err != nil {
-			break
-		}
+	// 有錢的時候不能領（門檻 5000）
+	if _, err := post(c, "/api/relief", map[string]string{"option": "chips"}); err == nil {
+		t.Fatal("籌碼充足時竟然領到救濟")
 	}
-	me := c.do("GET", "/api/me", nil)
-	if int(me["chips"].(float64)) > 0 {
-		// relief should refuse
-		if _, err := post(c, "/api/relief", map[string]string{"option": "chips"}); err == nil {
-			t.Fatal("relief granted while chips > 0")
-		} else {
-			return
-		}
+
+	// 把籌碼轉到剛好低於門檻（用轉賬精準控制）
+	have := int(c.do("GET", "/api/me", nil)["chips"].(float64))
+	keep := 4000 // < domain.ReliefThreshold(5000)
+	c.do("POST", "/api/transfer", map[string]any{"to": "eve_sink", "amount": have - keep})
+	if got := int(c.do("GET", "/api/me", nil)["chips"].(float64)); got != keep {
+		t.Fatalf("前置條件不對: %d", got)
 	}
-	// broke: relief works
+
+	// 低於門檻：救濟成功
 	resp := c.do("POST", "/api/relief", map[string]string{"option": "chips"})
 	if int(resp["chips_given"].(float64)) != 1000 {
 		t.Fatalf("relief: %v", resp)
 	}
-}
+	if got := int(c.do("GET", "/api/me", nil)["chips"].(float64)); got != keep+1000 {
+		t.Fatalf("救濟沒入賬: %d", got)
+	}
 
+	// 冷卻中不能再領
+	if _, err := post(c, "/api/relief", map[string]string{"option": "chips"}); err == nil {
+		t.Fatal("冷卻中竟然又領到救濟")
+	}
+}
 func TestStrictJSON(t *testing.T) {
 	srv, _ := setup(t)
 	c := newClient(t, srv, "frank")

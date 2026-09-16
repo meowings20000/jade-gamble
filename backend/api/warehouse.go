@@ -24,7 +24,7 @@ func (a *API) inventoryList(w http.ResponseWriter, r *http.Request) error {
 	for _, st := range stones {
 		card := map[string]any{
 			"id": st.ID, "seed": seedStr(st.Seed), "grade": int(st.Grade),
-			"price": st.Price, "hint": st.LightHint, "state": string(st.State), "origin": st.Origin,
+			"price": st.Price, "hint": hintFor(a, st), "state": string(st.State), "origin": st.Origin,
 		}
 		if st.Grade == domain.WindowGrade && !st.InkHidden {
 			card["window_desc"] = windowDesc(st)
@@ -100,6 +100,7 @@ func (a *API) cut(w http.ResponseWriter, r *http.Request) error {
 	var bal int
 	var titleAwarded string
 	var streakAfter int
+	var cutGem *domain.Gem
 
 	if err := a.Store.WithTx(func(tx *store.Tx) error {
 		if body.DoubleCoupon {
@@ -109,7 +110,9 @@ func (a *API) cut(w http.ResponseWriter, r *http.Request) error {
 			}
 			useCoupon = ok // if not held, proceed without coupon
 		}
-		payout = domain.CutReveal(st, useCoupon)
+		var gem *domain.Gem
+		payout, gem = domain.CutRevealWithGem(st, useCoupon, domain.RandSource)
+		cutGem = gem
 
 		// discovery + collection score
 		if st.Variety.IsExotic() || st.Quality >= domain.Icy {
@@ -121,14 +124,31 @@ func (a *API) cut(w http.ResponseWriter, r *http.Request) error {
 		}
 
 		// streak bookkeeping
+		// 跨日先把當日連勝歸零（以前 daily_win_streak 只加不減、也不看輸贏，
+		// 結果活躍帳號人人一個「黃金瞳」）。
+		var winDate string
+		_ = tx.QueryRow(`SELECT daily_win_date FROM users WHERE id=?`, uid).Scan(&winDate)
+		if winDate != today() {
+			if _, err := tx.Exec(`UPDATE users SET daily_win_streak = 0, daily_win_date = ? WHERE id=?`, today(), uid); err != nil {
+				return err
+			}
+		}
 		if st.Quality == domain.Brick {
-			_, err := tx.Exec(`UPDATE users SET streak_brick = streak_brick + 1 WHERE id=?`, uid)
-			if err != nil {
+			if _, err := tx.Exec(`UPDATE users SET streak_brick = streak_brick + 1 WHERE id=?`, uid); err != nil {
 				return err
 			}
 		} else {
-			_, err := tx.Exec(`UPDATE users SET streak_brick = 0, daily_win_streak = daily_win_streak + 1 WHERE id=?`, uid)
-			if err != nil {
+			if _, err := tx.Exec(`UPDATE users SET streak_brick = 0 WHERE id=?`, uid); err != nil {
+				return err
+			}
+		}
+		// 只有「真的賺錢」才算連勝，輸一刀就歸零
+		if payout >= st.Price {
+			if _, err := tx.Exec(`UPDATE users SET daily_win_streak = daily_win_streak + 1 WHERE id=?`, uid); err != nil {
+				return err
+			}
+		} else {
+			if _, err := tx.Exec(`UPDATE users SET daily_win_streak = 0 WHERE id=?`, uid); err != nil {
 				return err
 			}
 		}
@@ -143,7 +163,7 @@ func (a *API) cut(w http.ResponseWriter, r *http.Request) error {
 			}
 			titleAwarded = "賭徒之魂"
 		}
-		// 黃金瞳 egg: 5 wins in one day
+		// 黃金瞳：一刀切出 5 倍（或玻璃種）「而且」當日已連贏 5 刀——稀有成就。
 		if strings.EqualFold(st.Quality.Name(), "玻璃种") || payout >= st.Price*5 {
 			ws := 0
 			_ = tx.QueryRow(`SELECT daily_win_streak FROM users WHERE id=?`, uid).Scan(&ws)
@@ -167,6 +187,15 @@ func (a *API) cut(w http.ResponseWriter, r *http.Request) error {
 		if err := a.Store.SetStoneStateTx(tx, st.ID, domain.StateUsed, uid); err != nil {
 			return err
 		}
+		// 處理紀錄：玩家看得到自己切了什麼、賺賠多少
+		qName, vName := st.Quality.Name(), st.Variety.Name()
+		if cutGem != nil {
+			qName, vName = cutGem.Name, "彩蛋"
+		}
+		if err := a.Store.LogStoneTx(tx, uid, st.ID, "cut", int(st.Grade),
+			qName, vName, st.Price, payout); err != nil {
+			return err
+		}
 
 		// hall of fame for imperial green or 10× payout
 		if st.Variety == domain.ImperialGreen || payout >= st.Price*10 {
@@ -188,8 +217,39 @@ func (a *API) cut(w http.ResponseWriter, r *http.Request) error {
 		"quality": st.Quality.Name(), "variety": st.Variety.Name(),
 		"cracks": st.CrackCells, "deep_crack": st.CracksDeep,
 		"first_discovery": isNew, "collection_gain": firstScore,
-		"title_awarded": titleAwarded, "egg": st.Egg,
+		"title_awarded": titleAwarded, "egg": gemEggFlag(cutGem, st.Egg),
+		"gem": gemKey(cutGem), "gem_name": gemName(cutGem),
 		"multiplier": fmt.Sprintf("%.2f", float64(payout)/float64(st.Price)),
 	})
 	return nil
+}
+
+// hintFor: 沒打過燈只給肉眼可見的描述（蒙頭料沒有），打過燈才給報告。
+func hintFor(a *API, st *domain.Stone) string {
+	if a.Store.IsLit(st.ID) {
+		return st.LightHint
+	}
+	return domain.DescribeFree(st)
+}
+
+// gemKey / gemName / gemEggFlag: 彩蛋欄位（nil 時回空字串，前端據此決定要不要畫寶石）。
+func gemKey(g *domain.Gem) string {
+	if g == nil {
+		return ""
+	}
+	return g.Key
+}
+
+func gemName(g *domain.Gem) string {
+	if g == nil {
+		return ""
+	}
+	return g.Name
+}
+
+func gemEggFlag(g *domain.Gem, stoneEgg string) string {
+	if g != nil {
+		return "gem"
+	}
+	return stoneEgg
 }

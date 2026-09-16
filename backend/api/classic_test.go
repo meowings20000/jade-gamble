@@ -20,7 +20,7 @@ func TestClassicMode(t *testing.T) {
 
 	// valid bet
 	res := c.do("POST", "/api/classic/bet", map[string]any{"stake": 1000})
-	if res["chips"].(float64) != 9000 {
+	if res["chips"].(float64) != 49000 {
 		t.Fatalf("after bet: %v", res["chips"])
 	}
 	stoneID := res["stone_id"].(string)

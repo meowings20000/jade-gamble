@@ -175,6 +175,10 @@ func (a *API) polishCash(w http.ResponseWriter, r *http.Request) error {
 			}
 			firstScore, isNew = s, isNew2
 		}
+		if err := a.Store.LogStoneTx(tx, uid, st.ID, "polish", int(st.Grade),
+			st.Quality.Name(), st.Variety.Name(), st.Price, payout); err != nil {
+			return err
+		}
 		return a.Store.SetStoneStateTx(tx, st.ID, domain.StateUsed, uid)
 	}); err != nil {
 		return err

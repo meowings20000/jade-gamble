@@ -34,6 +34,7 @@ type ScratchProgress struct {
 	StoneID     string
 	UserID      int
 	Revealed    map[int]bool
+	Order       []int // 開格順序（累積值與順序有關）
 	Accumulated int
 	Done        bool
 	Layout      ScratchLayout // persisted truth; empty for legacy rows
@@ -87,12 +88,12 @@ func (p *ScratchProgress) SellNowFee() int {
 }
 
 func (s *Store) GetScratchProgress(stoneID string) (*ScratchProgress, error) {
-	row := s.db.QueryRow(`SELECT stone_id, user_id, revealed, accumulated, done, layout
+	row := s.db.QueryRow(`SELECT stone_id, user_id, revealed, accumulated, done, layout, order_cells
 		FROM scratch_progress WHERE stone_id=?`, stoneID)
 	var p ScratchProgress
-	var rev, layout string
+	var rev, layout, order string
 	var done int
-	err := row.Scan(&p.StoneID, &p.UserID, &rev, &p.Accumulated, &done, &layout)
+	err := row.Scan(&p.StoneID, &p.UserID, &rev, &p.Accumulated, &done, &layout, &order)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -102,6 +103,16 @@ func (s *Store) GetScratchProgress(stoneID string) (*ScratchProgress, error) {
 	p.Done = done == 1
 	p.Revealed = map[int]bool{}
 	_ = json.Unmarshal([]byte(rev), &p.Revealed)
+	p.Order = []int{}
+	_ = json.Unmarshal([]byte(order), &p.Order)
+	if len(p.Order) == 0 {
+		// 舊資料沒有順序：用格號排序當作當時的順序（近似還原）
+		for c := 0; c < domain.ScratchCells; c++ {
+			if p.Revealed[c] {
+				p.Order = append(p.Order, c)
+			}
+		}
+	}
 	p.Layout = ScratchLayout{CrackAt: map[int]bool{}, DeepAt: map[int]bool{}}
 	_ = json.Unmarshal([]byte(layout), &p.Layout)
 	return &p, nil
@@ -110,11 +121,12 @@ func (s *Store) GetScratchProgress(stoneID string) (*ScratchProgress, error) {
 func (s *Store) SaveScratchProgressFull(stoneID string, userID int, ss *domain.ScratchState, layout ScratchLayout) error {
 	rev, _ := json.Marshal(ss.Revealed)
 	lay, _ := json.Marshal(layout)
-	_, err := s.db.Exec(`INSERT INTO scratch_progress (stone_id, user_id, revealed, accumulated, done, layout)
-		VALUES (?,?,?,?,?,?)
+	order, _ := json.Marshal(ss.Order)
+	_, err := s.db.Exec(`INSERT INTO scratch_progress (stone_id, user_id, revealed, accumulated, done, layout, order_cells)
+		VALUES (?,?,?,?,?,?,?)
 		ON CONFLICT(stone_id) DO UPDATE SET revealed=excluded.revealed, accumulated=excluded.accumulated,
-			done=excluded.done, layout=excluded.layout`,
-		stoneID, userID, string(rev), ss.Accumulated, b2i(ss.Done), string(lay))
+			done=excluded.done, layout=excluded.layout, order_cells=excluded.order_cells`,
+		stoneID, userID, string(rev), ss.Accumulated, b2i(ss.Done), string(lay), string(order))
 	return err
 }
 
