@@ -26,6 +26,38 @@ func (a *API) polishStart(w http.ResponseWriter, r *http.Request) error {
 	if err != nil || st.OwnerID != uid || st.State != domain.StateOwned {
 		return store.ErrNotOwned
 	}
+	// 一次只能磨一顆：如果還有別顆在磨，自動幫他結算（錢照發），
+	// 不要再把玩家卡在「還在磨」的彈窗裡（2026-09-17 玩家 123aaa 卡死後的定案）。
+	autoSettled := []map[string]any{}
+	if others, oerr := a.Store.PolishRunningStones(uid); oerr == nil {
+		for _, sid := range others {
+			if sid == st.ID {
+				continue
+			}
+			o, gerr := a.Store.GetStone(sid)
+			op, perr := a.Store.GetPolishProgress(sid)
+			if gerr != nil || perr != nil || op == nil || !op.Alive {
+				continue
+			}
+			if o.OwnerID != uid || o.State != domain.StateOwned {
+				continue
+			}
+			ops := &domain.PolishState{Stage: op.Stage, Force: op.Force, Alive: true}
+			pay := ops.CashPayout(o, o.BaseValue())
+			if err := a.Store.WithTx(func(tx *store.Tx) error {
+				if _, err := store.UpdateChipsTx(tx, uid, pay); err != nil {
+					return err
+				}
+				if err := a.Store.FinishPolishTx(tx, sid); err != nil {
+					return err
+				}
+				return a.Store.SetStoneStateTx(tx, sid, domain.StateUsed, uid)
+			}); err != nil {
+				return err
+			}
+			autoSettled = append(autoSettled, map[string]any{"stone_id": sid, "payout": pay})
+		}
+	}
 	// resume or create
 	prog, err := a.Store.GetPolishProgress(st.ID)
 	if err != nil {
@@ -58,7 +90,8 @@ func (a *API) polishStart(w http.ResponseWriter, r *http.Request) error {
 		prog, _ = a.Store.GetPolishProgress(st.ID)
 	}
 	writeJSON(w, 200, map[string]any{
-		"stone_id": st.ID, "seed": seedStr(st.Seed),
+		"auto_settled": autoSettled,
+		"stone_id":     st.ID, "seed": seedStr(st.Seed),
 		"stage": prog.Stage, "multiplier": domain.PolishMultiplier(st, prog.Stage),
 		"ladder": map[string]any{
 			"start": domain.PolishStartMult, "gain": domain.PolishStepGain,

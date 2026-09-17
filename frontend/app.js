@@ -472,39 +472,7 @@ async function doPolish(st) {
   } catch (e) {
     // 還沒開磨（或這顆不是進行中的那顆）→ 往下走
   }
-  // 一次只能磨一顆：如果磨的是「別顆」，給他一條活路直接把那顆結算掉
-  try {
-    const me2 = await api('GET', '/api/me');
-    const other = me2.polish_stone || '';
-    if (Number(me2.polish_running || 0) > 0 && other && other !== st.id) {
-      const bg2 = document.createElement('div');
-      bg2.className = 'modal-bg';
-      const m2 = document.createElement('div');
-      m2.className = 'modal';
-      m2.innerHTML = '<h3>還有一顆在磨</h3>' +
-        '<p style="font-size:13px;color:var(--muted);line-height:1.6">一次只能磨一顆喵。<br>' +
-        '先把還在磨的那顆結算（落袋），就能磨這顆了。</p>' +
-        '<div class="row" style="margin-top:10px">' +
-        '<button class="btn" id="pol-cash-other">結算那一顆</button>' +
-        '<button class="btn ghost" id="pol-goto">我自己去處理</button></div>';
-      bg2.appendChild(m2);
-      document.body.appendChild(bg2);
-      m2.querySelector('#pol-goto').addEventListener('click', () => bg2.remove());
-      m2.querySelector('#pol-cash-other').addEventListener('click', async () => {
-        try {
-          let got = 0;
-          for (const sid of others) {
-            try { const r = await api('POST', '/api/polish/cash', { stone_id: sid }); if (r && r.payout) got += r.payout; } catch (e) { /* 單顆失敗不擋其他 */ }
-          }
-          bg2.remove();
-          toast(got ? ('已結算所有在磨的石頭，共 ' + fmt(got) + ' 喵喵幣') : '已結算');
-          try { await refreshMe(); } catch (e) {}
-          doPolish(st);
-        } catch (e) { toast(e.message || String(e)); }
-      });
-      return;
-    }
-  } catch (e) { /* 拿不到狀態就別擋 */ }
+  // 一次只能磨一顆由後端處理：開新的一顆時，舊的會自動結算（回傳 auto_settled）
   doPolishForcePicker(st);
 }
 
@@ -552,6 +520,11 @@ async function startPolish(st, force) {
   const body = { stone_id: st.id };
   if (force) body.force = force; // 不帶＝續磨既有的一輪
   const res = await api('POST', '/api/polish/start', body);
+  if (Array.isArray(res.auto_settled) && res.auto_settled.length) {
+    const total = res.auto_settled.reduce((s, x) => s + (Number(x.payout) || 0), 0);
+    toast('一次只能磨一顆，先幫你把上一顆結算了：+' + fmt(total) + ' 喵喵幣');
+    try { await refreshMe(); } catch (e) {}
+  }
   const bg = document.createElement('div');
   bg.className = 'modal-bg';
   const m = document.createElement('div');
