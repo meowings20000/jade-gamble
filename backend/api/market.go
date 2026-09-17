@@ -380,13 +380,14 @@ func (a *API) relief(w http.ResponseWriter, r *http.Request) error {
 	if u.Chips >= domain.ReliefThreshold {
 		return fmt.Errorf("籌碼還有 %d（%d 以下才能領救濟）", u.Chips, domain.ReliefThreshold)
 	}
-	// 3-hour cooldown between reliefs (relief_used keeps a counter for stats)
-	if u.ReliefAt != "" {
-		last, err := time.Parse(time.RFC3339, u.ReliefAt)
-		if err == nil && time.Since(last) < 3*time.Hour {
-			left := 3*time.Hour - time.Since(last)
-			return fmt.Errorf("救濟冷卻中，還剩 %d 分鐘", int(left.Minutes())+1)
-		}
+	// 每 24 小時最多 3 次（2026-09-17 用戶要求：1 天 3 次）
+	since := time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339)
+	used, err := a.Store.ReliefCountSince(int64(uid), since)
+	if err != nil {
+		return err
+	}
+	if used >= domain.ReliefPerDay {
+		return fmt.Errorf("24 小時內最多領 %d 次救濟，你已經領了 %d 次喵", domain.ReliefPerDay, used)
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	if body.Option == "ticket" {
@@ -398,6 +399,9 @@ func (a *API) relief(w http.ResponseWriter, r *http.Request) error {
 				pays = append(pays, p)
 				total += p
 			}
+			if _, err := tx.Exec(`INSERT INTO relief_log(user_id, at) VALUES(?, ?)`, uid, now); err != nil {
+				return err
+			}
 			_, err := tx.Exec(`UPDATE users SET chips = chips + ?, relief_used = relief_used + 1, relief_at = ? WHERE id=?`,
 				total+domain.ReliefAltChips, now, uid)
 			return err
@@ -408,6 +412,9 @@ func (a *API) relief(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	}
 	if err := a.Store.WithTx(func(tx *store.Tx) error {
+		if _, err := tx.Exec(`INSERT INTO relief_log(user_id, at) VALUES(?, ?)`, uid, now); err != nil {
+			return err
+		}
 		_, err := tx.Exec(`UPDATE users SET chips = chips + ?, relief_used = relief_used + 1, relief_at = ? WHERE id=?`,
 			domain.ReliefChips, now, uid)
 		return err

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"jade-gamble/backend/domain"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -340,14 +341,14 @@ func TestRelief(t *testing.T) {
 
 	// 低於門檻：救濟成功
 	resp := c.do("POST", "/api/relief", map[string]string{"option": "chips"})
-	if int(resp["chips_given"].(float64)) != 1000 {
+	if int(resp["chips_given"].(float64)) != domain.ReliefChips {
 		t.Fatalf("relief: %v", resp)
 	}
-	if got := int(c.do("GET", "/api/me", nil)["chips"].(float64)); got != keep+1000 {
+	if got := int(c.do("GET", "/api/me", nil)["chips"].(float64)); got != keep+domain.ReliefChips {
 		t.Fatalf("救濟沒入賬: %d", got)
 	}
 
-	// 冷卻中不能再領
+	// 剛領完（籌碼已高於門檻）不能再領
 	if _, err := post(c, "/api/relief", map[string]string{"option": "chips"}); err == nil {
 		t.Fatal("冷卻中竟然又領到救濟")
 	}

@@ -152,3 +152,24 @@ func (s *Store) GemCounts(userID int64, names []string) (map[string]int, error) 
 	}
 	return out, nil
 }
+
+// EnsureReliefLog: 救濟領取紀錄（用來算「24 小時內領了幾次」）。
+func (s *Store) EnsureReliefLog() error {
+	_, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS relief_log (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id INTEGER NOT NULL,
+		at TEXT NOT NULL
+	)`)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_relief_user ON relief_log(user_id, at)`)
+	return err
+}
+
+// ReliefCountSince: 這名玩家在 since（RFC3339 字串）之後領了幾次救濟。
+func (s *Store) ReliefCountSince(userID int64, since string) (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM relief_log WHERE user_id = ? AND at > ?`, userID, since).Scan(&n)
+	return n, err
+}

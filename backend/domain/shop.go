@@ -94,8 +94,10 @@ const SignupChips = 50000
 const (
 	// ReliefThreshold: 籌碼低於此數即可領救濟。
 	ReliefThreshold = 5000
-	ReliefChips     = 1000
-	ReliefAltChips  = 300
+	// ReliefPerDay: 每 24 小時最多領幾次救濟（2026-09-17 用戶要求：1 天 3 次）。
+	ReliefPerDay   = 3
+	ReliefChips    = 50000
+	ReliefAltChips = 300
 )
 
 // DailyAllowance: chips granted on a brand-new day (loyalty drip).
