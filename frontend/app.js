@@ -1250,12 +1250,23 @@ async function loadBank() {
   if (sd) sd.onclick = async () => {
     const msg = $('#bk-say').value.trim();
     if (!msg) return;
-    try {
-      const r = await api('POST', '/api/bank/appeal', { message: msg });
+    {
+      const chat = $('#bk-chat');
+      const say = (role, text) => {
+        if (chat) { chat.insertAdjacentHTML('beforeend', bubble(role, text)); chat.scrollTop = chat.scrollHeight; }
+      };
       $('#bk-say').value = '';
-      toast(r.message, true);
-      loadBank();
-    } catch (e) { toast(e.message); }
+      say('me', msg); // 先把自己說的話顯示出來（就算申訴被擋，也不能讓玩家覺得訊息消失了）
+      try {
+        const r = await api('POST', '/api/bank/appeal', { message: msg });
+        if (r && r.message) say('them', r.message);
+        toast(r.message, true);
+        loadBank();
+      } catch (e) {
+        say('them', e.message || String(e));
+        toast(e.message || String(e));
+      }
+    }
   };
 }
 

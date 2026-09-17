@@ -6,30 +6,34 @@ import (
 	"jade-gamble/backend/domain"
 )
 
-// gemCollection: GET /api/gems —— 寶石圖鑒（全部 6 種 + 我收集到的）。
+// gemCollection: GET /api/gems —— 寶石圖鑒：全部彩蛋寶石 + 我切到過幾次。
 func (a *API) gemCollection(w http.ResponseWriter, r *http.Request) error {
 	uid, err := a.userID(r)
 	if err != nil {
 		return err
 	}
-	owned, err := a.Store.GemCollection(uid)
+	odds := domain.GemOdds()
+	names := make([]string, 0, len(odds))
+	for _, g := range odds {
+		names = append(names, g["name"].(string))
+	}
+	counts, err := a.Store.GemCounts(int64(uid), names)
 	if err != nil {
 		return err
 	}
-	list := []map[string]any{}
-	total := 0
-	for _, g := range domain.Gems {
-		item := map[string]any{"key": g.Key, "name": g.Name, "mult": g.Mult, "prob": g.Prob, "count": 0, "first_at": ""}
-		if o, ok := owned[g.Key]; ok {
-			item["count"] = o.Count
-			item["first_at"] = o.FirstAt
-			total += o.Count
-		}
-		list = append(list, item)
+	list := make([]map[string]any, 0, len(odds))
+	for _, g := range odds {
+		nm, _ := g["name"].(string)
+		list = append(list, map[string]any{
+			"key":      g["key"],
+			"name":     nm,
+			"mult":     g["mult"],
+			"prob":     g["prob"],
+			"overall":  g["overall"],
+			"count":    counts[nm],
+			"first_at": "",
+		})
 	}
-	writeJSON(w, 200, map[string]any{
-		"gems": list, "kinds_total": len(domain.Gems), "kinds_owned": len(owned), "count_total": total,
-		"chance": domain.GemChance,
-	})
+	writeJSON(w, 200, map[string]any{"ok": true, "chance": domain.GemChance, "gems": list})
 	return nil
 }

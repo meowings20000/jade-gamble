@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"strings"
 
 	"jade-gamble/backend/domain"
 )
@@ -122,4 +123,32 @@ func (s *Store) TitleStats(userID int) (domain.TitleStats, error) {
 func (s *Store) EquipTitle(userID int, title string) error {
 	_, err := s.db.Exec(`UPDATE users SET title = ? WHERE id = ?`, title, userID)
 	return err
+}
+
+// GemCounts: 這名玩家切到過的寶石（依品質名統計），給寶石圖鑒用。
+func (s *Store) GemCounts(userID int64, names []string) (map[string]int, error) {
+	out := map[string]int{}
+	if len(names) == 0 {
+		return out, nil
+	}
+	ph := make([]string, len(names))
+	args := []any{userID}
+	for i, n := range names {
+		ph[i] = "?"
+		args = append(args, n)
+	}
+	rows, err := s.db.Query(`SELECT quality, COUNT(*) FROM stone_log WHERE user_id = ? AND quality IN (`+
+		strings.Join(ph, ",")+`) GROUP BY quality`, args...)
+	if err != nil {
+		return out, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var q string
+		var c int
+		if err := rows.Scan(&q, &c); err == nil {
+			out[q] = c
+		}
+	}
+	return out, nil
 }
