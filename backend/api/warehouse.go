@@ -196,6 +196,12 @@ func (a *API) cut(w http.ResponseWriter, r *http.Request) error {
 			qName, vName, st.Price, payout); err != nil {
 			return err
 		}
+		// 切到彩蛋寶石 → 記進寶石圖鑒
+		if cutGem != nil {
+			if err := a.Store.RecordGemTx(tx, uid, cutGem.Key); err != nil {
+				return err
+			}
+		}
 
 		// hall of fame for imperial green or 10× payout
 		if st.Variety == domain.ImperialGreen || payout >= st.Price*10 {

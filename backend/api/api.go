@@ -89,6 +89,7 @@ func (a *API) Routes() *http.ServeMux {
 	mux.HandleFunc("POST /api/admin/rewards/decide", a.handler(a.adminRewardDecide))
 	mux.HandleFunc("GET /api/heist", a.handler(a.heistState))
 	mux.HandleFunc("POST /api/heist/join", a.handler(a.heistJoin))
+	mux.HandleFunc("GET /api/gems", a.handler(a.gemCollection))
 	mux.HandleFunc("POST /api/heist/fill", a.handler(a.heistFill))
 	mux.HandleFunc("POST /api/heist/act", a.handler(a.heistAct))
 	mux.HandleFunc("POST /api/heist/leave", a.handler(a.heistLeave))

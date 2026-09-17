@@ -311,6 +311,9 @@ func (s *Store) migrate() error {
 		!strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
 		return fmt.Errorf("migrate heist seat left: %w", err)
 	}
+	if err := s.EnsureGemTable(); err != nil {
+		return fmt.Errorf("migrate gem_collection: %w", err)
+	}
 	// 奪寶回合計時（舊 DB 沒有這個欄位，要先 ALTER 再建索引，不然整個服務起不來）
 	if _, err := s.db.Exec(`ALTER TABLE heists ADD COLUMN round_at TEXT`); err != nil &&
 		!strings.Contains(strings.ToLower(err.Error()), "duplicate column") {

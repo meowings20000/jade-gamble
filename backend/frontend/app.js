@@ -52,7 +52,7 @@ document.querySelectorAll('nav button').forEach(b =>
     show(b.dataset.view);
     ({ shop: loadShop, warehouse: loadWarehouse, market: loadMarket,
        exchange: () => { loadExchange(); if (typeof loadRewards === 'function') loadRewards(); },
-       collection: loadCollection, ranks: loadRanks,
+       collection: () => { loadCollection(); loadGemBook(); }, ranks: loadRanks,
        transfer: loadTransfers, admin: loadAdmin, history: loadHistory, bank: loadBank,
        heist: (typeof loadHeist === 'function' ? (() => { loadHeist(); if (typeof heistEnsurePoll === 'function') heistEnsurePoll(); if (!window.__heistTick) window.__heistTick = setInterval(() => { const v = document.getElementById('view-heist'); if (v && v.classList.contains('active') && typeof loadHeist === 'function') { loadHeist(); if (typeof heistSyncChips === 'function') heistSyncChips(); } }, 2500); }) : loadShop) })[b.dataset.view]();
   }));
@@ -1257,4 +1257,48 @@ async function loadBank() {
       loadBank();
     } catch (e) { toast(e.message); }
   };
+}
+
+// 寶石圖鑒（2026-09-17 用戶要求）：切到過的彩蛋寶石永久收集
+async function loadGemBook() {
+  const host = document.querySelector('#view-collection');
+  if (!host) return;
+  let box = document.getElementById('gem-book');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'gem-book';
+    box.style.marginTop = '16px';
+    host.appendChild(box);
+  }
+  let d;
+  try { d = await api('GET', '/api/gems'); }
+  catch (e) {
+    box.innerHTML = '<div class="card"><h3 style="color:var(--gold)">💎 寶石圖鑒</h3>' +
+      '<div style="color:var(--muted);font-size:13px">讀取失敗：' + esc(String(e)) + '</div></div>';
+    return;
+  }
+  const list = d.gems || [];
+  const cards = list.map((g, i) => {
+    const got = (g.count || 0) > 0;
+    const pct = ((g.prob || 0) * (d.chance || 0) * 100).toFixed(2);
+    return '<div class="card" style="text-align:center;padding:10px;' + (got ? '' : 'opacity:.55;') + '">' +
+      (got ? '<canvas id="gem-cv-' + i + '" width="120" height="120" style="width:104px;height:104px"></canvas>'
+           : '<div style="font-size:38px;padding:16px 0">❔</div>') +
+      '<div style="font-weight:700;margin-top:4px;font-size:14px">' + (got ? esc(g.name) : '？？？') + '</div>' +
+      '<div style="font-size:12px;color:var(--muted)">' +
+        (got ? ('切到 ' + g.count + ' 次 · 首次 ' + esc(String(g.first_at || '').slice(0, 10)))
+             : ('未收集 · 整體 ' + pct + '%')) + '</div>' +
+      '<div style="font-size:12px;color:var(--gold)">價值 ×' + Number(g.mult).toFixed(2) + '</div>' +
+      '</div>';
+  }).join('');
+  box.innerHTML = '<div class="card"><h3 style="color:var(--gold);margin-bottom:4px">💎 寶石圖鑒</h3>' +
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">切石時 5% 會切出「不是玉石」的寶石彩蛋；收集 ' +
+    (d.kinds_owned || 0) + ' / ' + (d.kinds_total || 0) + ' 種，共 ' + (d.count_total || 0) + ' 顆</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px">' + cards + '</div></div>';
+  list.forEach((g, i) => {
+    if ((g.count || 0) > 0 && window.StoneRender && StoneRender.cutView) {
+      const cv = document.getElementById('gem-cv-' + i);
+      if (cv) { try { StoneRender.cutView(cv, 1234 + i * 77, g.key, 'base', { grade: 0 }); } catch (e) {} }
+    }
+  });
 }
