@@ -526,6 +526,7 @@ async function startPolish(st, force) {
     <div class="row" style="margin-top:10px">
       <button class="btn" id="pol-adv">再磨一層</button>
       <button class="btn danger" id="pol-cash">落袋</button>
+      <button class="btn ghost" id="pol-close">暫時關掉（進度保留）</button>
     </div>`;
   bg.appendChild(m);
   document.body.appendChild(bg);
