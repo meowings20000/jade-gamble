@@ -63,7 +63,7 @@ var ExchangeCatalog = []ExchangeItem{
 		"磨崩退回 50% 石底價。價格＝磨石標的底價的 15%（購買時自動計）。"},
 	{"double_coupon", "雙倍券", 3000, "consumable",
 		"下一刀切石賠率 ×2（磚頭料不救）。"},
-	{"free_refresh", "免費刷新券", 800, "consumable",
+	{"free_refresh", "免費刷新券", 5000, "consumable",
 		"任一檔貨架刷新 0 元一次，不佔當日遞增費率。"},
 	{"light_master", "打燈大師卡", 2000, "buff",
 		"24 小時打燈報告半價，誤導率 30%→22%。"},

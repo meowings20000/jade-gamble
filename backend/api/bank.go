@@ -33,17 +33,20 @@ func (a *API) bank(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	offer, _ := a.Store.PendingOffer(uid)
 	chat := []map[string]string{}
 	var repayTotal int
 	if loan != nil {
 		chat, _ = a.Store.LoanChat(loan.ID)
 		repayTotal = loan.Principal + loan.Interest
+	} else if offer != nil {
+		// 還沒按「接受」時，對話記在「提議」那筆上（申訴來回都在這裡）
+		chat, _ = a.Store.LoanChat(offer.ID)
 	}
 	hist, err := a.Store.LoanHistory(uid, 10)
 	if err != nil {
 		return err
 	}
-	offer, _ := a.Store.PendingOffer(uid)
 	writeJSON(w, 200, map[string]any{
 		"chips": u.Chips, "loan": loan, "offer": offer, "chat": chat, "history": hist,
 		"repay_total": repayTotal,

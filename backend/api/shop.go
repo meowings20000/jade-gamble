@@ -160,10 +160,8 @@ func (a *API) shopRefresh(w http.ResponseWriter, r *http.Request) error {
 				return err
 			}
 		}
-		if !usedCoupon {
-			return a.Store.IncRefreshTx(tx, uid, g, today())
-		}
-		return nil
+		// 用券也要累加當日次數：否則拿著券就能永遠用基準價刷新（價格不會漲）
+		return a.Store.IncRefreshTx(tx, uid, g, today())
 	}); err != nil {
 		return err
 	}
