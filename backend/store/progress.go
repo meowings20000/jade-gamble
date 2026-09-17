@@ -198,3 +198,34 @@ func (s *Store) FinishPolishTx(tx *sql.Tx, stoneID string) error {
 	_, err := tx.Exec(`UPDATE polish_progress SET alive=0 WHERE stone_id=?`, stoneID)
 	return err
 }
+
+// PolishRunningStones: 真的還能續磨的進行中石頭（石頭還在倉庫、狀態 owned）。
+// 2026-09-17 玩家 123aaa 卡死：石頭早就結算掉了，polish_progress 的幽靈紀錄
+// 還掛著 alive=1，於是「一次只能磨一顆」把玩家永遠擋在外面。
+func (s *Store) PolishRunningStones(userID int) ([]string, error) {
+	rows, err := s.db.Query(`SELECT p.stone_id FROM polish_progress p
+		JOIN stones s ON s.id = p.stone_id
+		WHERE p.user_id = ? AND p.alive = 1 AND s.owner_id = ? AND s.state = 'owned'
+		ORDER BY p.stone_id`, userID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return out, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// PurgeStalePolish: 清掉幽靈紀錄（石頭已經不在倉庫或已處理完）。
+func (s *Store) PurgeStalePolish(userID int) error {
+	_, err := s.db.Exec(`DELETE FROM polish_progress
+		WHERE user_id = ? AND alive = 1
+		AND stone_id NOT IN (SELECT id FROM stones WHERE owner_id = ? AND state = 'owned')`, userID, userID)
+	return err
+}

@@ -179,11 +179,15 @@ func (a *API) polishCash(w http.ResponseWriter, r *http.Request) error {
 	}
 	st, err := a.Store.GetStone(body.StoneID)
 	if err != nil || st.OwnerID != uid || st.State != domain.StateOwned {
+		// 石頭已經不在了／已處理：把幽靈進度收掉，
+		// 否則玩家按「結算」永遠失敗，又一直被「一次只能磨一顆」擋住（123aaa 回報）
+		_ = a.Store.FinishPolish(body.StoneID)
 		return store.ErrNotOwned
 	}
 	prog, err := a.Store.GetPolishProgress(st.ID)
 	if err != nil || prog == nil || !prog.Alive {
-		return errors.New("polish session invalid")
+		_ = a.Store.FinishPolish(st.ID)
+		return errors.New("這一顆已經結算過了喵")
 	}
 	ps := &domain.PolishState{Stage: prog.Stage, Force: prog.Force, Alive: prog.Alive}
 	payout := ps.CashPayout(st, st.BaseValue())

@@ -492,9 +492,12 @@ async function doPolish(st) {
       m2.querySelector('#pol-goto').addEventListener('click', () => bg2.remove());
       m2.querySelector('#pol-cash-other').addEventListener('click', async () => {
         try {
-          const r = await api('POST', '/api/polish/cash', { stone_id: other });
+          let got = 0;
+          for (const sid of others) {
+            try { const r = await api('POST', '/api/polish/cash', { stone_id: sid }); if (r && r.payout) got += r.payout; } catch (e) { /* 單顆失敗不擋其他 */ }
+          }
           bg2.remove();
-          toast('已結算：' + (r.payout !== undefined ? r.payout + ' 喵喵幣' : '完成'));
+          toast(got ? ('已結算所有在磨的石頭，共 ' + fmt(got) + ' 喵喵幣') : '已結算');
           try { await refreshMe(); } catch (e) {}
           doPolish(st);
         } catch (e) { toast(e.message || String(e)); }

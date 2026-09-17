@@ -178,18 +178,26 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) error {
 		"is_admin": a.isAdmin(uid), "discord_id": u.DiscordID,
 		"frame": a.Store.EquippedFrame(uid),
 		"polish_running": func() int {
-			n, err := a.Store.PolishRunningCount(uid)
+			_ = a.Store.PurgeStalePolish(uid) // 幽靈紀錄清掉，免得把玩家卡死
+			ids, err := a.Store.PolishRunningStones(uid)
 			if err != nil {
 				return 0
 			}
-			return n
+			return len(ids)
+		}(),
+		"polish_stones": func() []string {
+			ids, err := a.Store.PolishRunningStones(uid)
+			if err != nil {
+				return []string{}
+			}
+			return ids
 		}(),
 		"polish_stone": func() string {
-			id, err := a.Store.PolishRunningStone(uid)
-			if err != nil {
+			ids, err := a.Store.PolishRunningStones(uid)
+			if err != nil || len(ids) == 0 {
 				return ""
 			}
-			return id
+			return ids[0]
 		}(),
 	})
 	return nil
