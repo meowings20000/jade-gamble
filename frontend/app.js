@@ -366,6 +366,7 @@ function showResultModal(title, res, st) {
     ${res.first_discovery ? `<div class="egg-banner">🆕 圖鑑新發現：${res.variety}（收藏分 +${res.collection_gain}）</div>` : ''}
     ${res.title_awarded ? `<div class="egg-banner">🏅 獲得稱號：${res.title_awarded}</div>` : ''}
     ${res.broke_at !== undefined ? `<div class="kv"><span>磨崩於第</span><b>${res.broke_at} 層</b></div>` : ''}
+    ${res.salvage ? `<div class="kv"><span>磨崩救回（當前倍率 30%）</span><b style="color:var(--gold)">+${fmt(res.salvage)}</b></div>` : ''}
     ${res.insurance_refund ? `<div class="kv"><span>保險理賠</span><b>+${fmt(res.insurance_refund)}</b></div>` : ''}
     <div class="row" style="margin-top:14px"><button class="btn" id="m-close">收下</button></div>`;
   bg.appendChild(m);
@@ -513,15 +514,14 @@ async function startPolish(st, force) {
   m.innerHTML = `
     <h3>磨石 — ${res.force_name} <span style="font-size:12px;color:var(--muted)">皮殼一寸寸磨掉</span></h3>
     <div class="big-result" id="pol-mult">×${Number(res.multiplier).toFixed(2)}</div>
-    <div class="kv"><span>目前價值</span><b id="pol-value"></b></div>
-    <div class="kv"><span>買入價</span><b>${fmt(st.price)} 喵喵幣</b></div>
-    <div class="kv"><span>賺賠</span><b id="pol-net"></b></div>
+    <div class="kv"><span>目前倍率</span><b id="pol-mult2">×${Number(res.multiplier).toFixed(2)}</b></div>
+    <div class="kv"><span>這顆料的價值</span><b style="color:var(--muted)">落袋那一刻才知道</b></div>
     <div class="ladder" id="pol-ladder"></div>
-    <div class="kv"><span>下一層爆裂機率</span><b id="pol-risk">${pct(res.break_prob)}</b></div>
-    <div class="kv"><span>磨成下一層</span><b id="pol-next"></b></div>
+    <div class="kv"><span>下一層爆裂機率（第一層最多 25%）</span><b id="pol-risk">${pct(res.break_prob)}</b></div>
+    <div class="kv"><span>下一層倍率</span><b id="pol-next"></b></div>
     <p id="pol-feel" style="font-size:13px;color:var(--gold);margin:10px 0;line-height:1.6">👁 ${res.feel}</p>
     <p style="font-size:12px;color:var(--muted);margin:8px 0">
-      開磨即損 7% 皮殼價。力度配得上就磨得順，配不上每層都在賭命——
+      開磨即損 7% 皮殼價。磨的過程<b>不顯示價值</b>（傳統玩法的規矩），落袋那一刻才結算。力度配得上就磨得順，配不上每層都在賭命——
       <b>手感會告訴你配不配</b>，隨時可以落袋。</p>
     <div class="row" style="margin-top:10px">
       <button class="btn" id="pol-adv">再磨一層</button>
@@ -535,25 +535,18 @@ async function startPolish(st, force) {
   // 顯示「伺服器真的會發多少」＝ BaseValue × 倍率（不是用你付的價格算，兩者不同）
   const baseValue = Number(res.base_value || 0) || Math.round(st.price * Number(res.multiplier || 1));
   const price = Number(res.stone_price || st.price || 0);
-  const paintValue = (mult, cashValue) => {
-    const v = cashValue !== undefined && cashValue !== null
-      ? Math.round(Number(cashValue))
-      : Math.round(baseValue * (Number(mult) / (Number(res.multiplier) || 1)));
-    const net = v - price;
-    m.querySelector('#pol-value').textContent = fmt(v) + ' 喵喵幣';
-    const netEl = m.querySelector('#pol-net');
-    netEl.innerHTML = `<span style="color:${net >= 0 ? 'var(--green)' : 'var(--red)'}">${net >= 0 ? '+' : ''}${fmt(net)}</span>`;
-    m.querySelector('#pol-cash').textContent = net >= 0
-      ? `落袋實拿 ${fmt(v)}（成本 ${fmt(price)}・淨賺 ${fmt(net)}）`
-      : `落袋實拿 ${fmt(v)}（成本 ${fmt(price)}・淨賠 ${fmt(-net)}）`;
+  // 不顯示價值：磨的過程只看倍率、爆裂率與手感，價值落袋才結算
+  const paintValue = (mult) => {
+    const mm = m.querySelector('#pol-mult2');
+    if (mm) mm.textContent = '×' + Number(mult).toFixed(2);
+    const cashBtn = m.querySelector('#pol-cash');
+    if (cashBtn) cashBtn.textContent = '落袋（結算才知道價值）';
   };
-  paintValue(res.multiplier, res.cash_value);
+  paintValue(res.multiplier);
   const paintNext = (mult, top) => {
-    const nextMult = Math.min(Number(mult) * 1.2, top || 99);
-    const nv = Math.round(st.price * nextMult);
-    m.querySelector('#pol-next').innerHTML = top
-      ? `×${nextMult.toFixed(2)} → ${fmt(nv)} 喵喵幣`
-      : `×${nextMult.toFixed(2)} → ${fmt(nv)} 喵喵幣`;
+    const nextMult = Math.min(Number(mult) * 1.25, top || 99);
+    const el = m.querySelector('#pol-next');
+    if (el) el.innerHTML = `×${nextMult.toFixed(2)}` + (top && nextMult >= top ? '（已到這顆料的天花板）' : '');
   };
   paintNext(res.multiplier, res.ladder && res.ladder.top);
   const paintLadder = (stage) => {
@@ -572,7 +565,7 @@ async function startPolish(st, force) {
       if (rr.alive) {
         m.querySelector('#pol-mult').textContent = '×' + Number(rr.multiplier).toFixed(2);
         paintValue(rr.multiplier);
-        m.querySelector('#pol-risk').textContent = pct(rr.break_prob);
+        m.querySelector('#pol-risk').textContent = pct(rr.break_prob) + (rr.stage === 0 ? '（第一層上限 25%）' : '');
         m.querySelector('#pol-feel').textContent = '👁 ' + rr.feel;
         paintLadder(rr.stage);
         paintNext(rr.multiplier, res.ladder && res.ladder.top);

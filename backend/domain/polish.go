@@ -156,9 +156,17 @@ func (p *PolishState) Multiplier(st *Stone) float64 { return PolishMultiplier(st
 // AtTop: 已到天花板。
 func (p *PolishState) AtTop() bool { return p.Stage >= PolishMaxStage }
 
+// PolishFirstLayerCap: 第一層只磨掉皮殼，風險上限 25%（2026-09-17 用戶反映
+// 「選錯力度第一層就爆」太靠運氣，先給一次便宜的試探機會）。
+const PolishFirstLayerCap = 0.25
+
 // Advance rolls one more layer. Returns (alive, brokeAtStage).
 func (p *PolishState) Advance(st *Stone, r Rand, breakModifier float64) (bool, int) {
-	if r.Float64() < PolishBreakProb(st, p.Force, breakModifier) {
+	prob := PolishBreakProb(st, p.Force, breakModifier)
+	if p.Stage == 0 && prob > PolishFirstLayerCap {
+		prob = PolishFirstLayerCap
+	}
+	if r.Float64() < prob {
 		p.Alive = false
 		return false, p.Stage + 1
 	}

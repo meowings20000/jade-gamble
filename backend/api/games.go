@@ -59,9 +59,15 @@ func (a *API) polishStart(w http.ResponseWriter, r *http.Request) error {
 		},
 		"base_value": st.BaseValue(), "cash_value": int(float64(st.BaseValue()) * domain.PolishMultiplier(st, prog.Stage)), "stone_price": st.Price,
 		"alive": prog.Alive, "force": prog.Force, "force_name": domain.PolishForceName(prog.Force),
-		"break_prob": domain.PolishBreakProb(st, prog.Force, prog.BreakMod),
-		"feel":       domain.PolishFeel(st, prog.Force),
-		"at_top":     prog.Stage >= domain.PolishMaxStage,
+		"break_prob": func() float64 {
+			pr := domain.PolishBreakProb(st, prog.Force, prog.BreakMod)
+			if prog.Stage == 0 && pr > domain.PolishFirstLayerCap {
+				pr = domain.PolishFirstLayerCap
+			}
+			return pr
+		}(),
+		"feel":   domain.PolishFeel(st, prog.Force),
+		"at_top": prog.Stage >= domain.PolishMaxStage,
 	})
 	return nil
 }
