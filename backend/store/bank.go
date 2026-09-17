@@ -100,7 +100,7 @@ func (s *Store) OverdueLoans() ([]domain.Loan, error) {
 	for rows.Next() {
 		var l domain.Loan
 		if err := rows.Scan(&l.ID, &l.UserID, &l.Principal, &l.Interest, &l.Hours, &l.DueAt,
-			&l.Status, &l.Appeals, &l.Reason, &l.CreatedAt); err != nil {
+			&l.Status, &l.Appeals, &l.Reason, &l.CreatedAt, &l.Rate, &l.Penalty); err != nil {
 			return nil, err
 		}
 		out = append(out, l)
@@ -138,7 +138,7 @@ func (s *Store) LoanHistory(userID, limit int) ([]domain.Loan, error) {
 	for rows.Next() {
 		var l domain.Loan
 		if err := rows.Scan(&l.ID, &l.UserID, &l.Principal, &l.Interest, &l.Hours, &l.DueAt,
-			&l.Status, &l.Appeals, &l.Reason, &l.CreatedAt); err != nil {
+			&l.Status, &l.Appeals, &l.Reason, &l.CreatedAt, &l.Rate, &l.Penalty); err != nil {
 			return nil, err
 		}
 		out = append(out, l)
