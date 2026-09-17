@@ -174,3 +174,20 @@ func (s *Store) PolishRunningCount(userID int) (int, error) {
 	err := s.db.QueryRow(`SELECT COUNT(*) FROM polish_progress WHERE user_id=? AND alive=1`, userID).Scan(&n)
 	return n, err
 }
+
+// PolishRunningStone: 正在磨的那顆石頭 id（沒有就回空字串）。
+func (s *Store) PolishRunningStone(userID int) (string, error) {
+	var id string
+	err := s.db.QueryRow(`SELECT stone_id FROM polish_progress WHERE user_id=? AND alive=1 ORDER BY stone_id LIMIT 1`, userID).Scan(&id)
+	if err != nil {
+		return "", nil
+	}
+	return id, nil
+}
+
+// FinishPolish: 這一輪結束了（落袋或磨崩），把它從「進行中」拿掉。
+// 少了這步，玩家結算後還是會被「一次只能磨一顆」擋住（2026-09-17 玩家 123aaa 回報卡住）。
+func (s *Store) FinishPolish(stoneID string) error {
+	_, err := s.db.Exec(`UPDATE polish_progress SET alive=0 WHERE stone_id=?`, stoneID)
+	return err
+}

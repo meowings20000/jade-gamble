@@ -184,6 +184,13 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) error {
 			}
 			return n
 		}(),
+		"polish_stone": func() string {
+			id, err := a.Store.PolishRunningStone(uid)
+			if err != nil {
+				return ""
+			}
+			return id
+		}(),
 	})
 	return nil
 }

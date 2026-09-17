@@ -472,12 +472,33 @@ async function doPolish(st) {
   } catch (e) {
     // 還沒開磨（或這顆不是進行中的那顆）→ 往下走
   }
-  // 一次只能磨一顆：手上還有別顆在磨，先結算那顆再開新的
+  // 一次只能磨一顆：如果磨的是「別顆」，給他一條活路直接把那顆結算掉
   try {
-    const st2 = await api('GET', '/api/me');
-    const running = Number(st2.polish_running || 0);
-    if (running > 0) {
-      toast('你手上還有一顆在磨石，先把它落袋結算，才能開新的喵。');
+    const me2 = await api('GET', '/api/me');
+    const other = me2.polish_stone || '';
+    if (Number(me2.polish_running || 0) > 0 && other && other !== st.id) {
+      const bg2 = document.createElement('div');
+      bg2.className = 'modal-bg';
+      const m2 = document.createElement('div');
+      m2.className = 'modal';
+      m2.innerHTML = '<h3>還有一顆在磨</h3>' +
+        '<p style="font-size:13px;color:var(--muted);line-height:1.6">一次只能磨一顆喵。<br>' +
+        '先把還在磨的那顆結算（落袋），就能磨這顆了。</p>' +
+        '<div class="row" style="margin-top:10px">' +
+        '<button class="btn" id="pol-cash-other">結算那一顆</button>' +
+        '<button class="btn ghost" id="pol-goto">我自己去處理</button></div>';
+      bg2.appendChild(m2);
+      document.body.appendChild(bg2);
+      m2.querySelector('#pol-goto').addEventListener('click', () => bg2.remove());
+      m2.querySelector('#pol-cash-other').addEventListener('click', async () => {
+        try {
+          const r = await api('POST', '/api/polish/cash', { stone_id: other });
+          bg2.remove();
+          toast('已結算：' + (r.payout !== undefined ? r.payout + ' 喵喵幣' : '完成'));
+          try { await refreshMe(); } catch (e) {}
+          doPolish(st);
+        } catch (e) { toast(e.message || String(e)); }
+      });
       return;
     }
   } catch (e) { /* 拿不到狀態就別擋 */ }

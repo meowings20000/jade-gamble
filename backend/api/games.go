@@ -196,6 +196,9 @@ func (a *API) polishCash(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 		bal = b
+		if err := a.Store.FinishPolish(st.ID); err != nil { // 結算＝這一輪結束
+			return err
+		}
 		if st.Variety.IsExotic() || st.Quality >= domain.Icy {
 			s, isNew2, err := a.discover(tx, uid, st.Variety)
 			if err != nil {
