@@ -223,3 +223,31 @@ func (s *Store) SetLoanAppealsTx(tx *sql.Tx, id, n int) error {
 	_, err := tx.Exec(`UPDATE loans SET appeals = ? WHERE id = ?`, n, id)
 	return err
 }
+
+// LatestChat: 這名玩家「最近一筆」貸款的對話（不管狀態、是提議或被拒的都算）。
+// 用途：/api/bank 顯示申訴來回——AI 可能把對話寫在提議那筆而不是生效中的貸款，
+// 直接抓最近一筆最保險。
+func (s *Store) LatestChat(userID int) ([]map[string]string, error) {
+	var id int
+	if err := s.db.QueryRow(`SELECT id FROM loans WHERE user_id=? ORDER BY id DESC LIMIT 1`, userID).Scan(&id); err != nil {
+		return []map[string]string{}, nil
+	}
+	return s.LoanChat(id)
+}
+
+// CopyLoanChat: 把對話從舊貸款列搬到新列。
+// 原因：AI 反提議（counter）會開一筆新的 loans 列，對話若留在舊列就會「看不到」。
+func (s *Store) CopyLoanChat(fromID, toID int) error {
+	if fromID == 0 || toID == 0 || fromID == toID {
+		return nil
+	}
+	var n int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM loan_chat WHERE loan_id=?`, toID).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil // 新列自己已經有對話，不覆蓋
+	}
+	_, err := s.db.Exec(`INSERT INTO loan_chat (loan_id, role, content) SELECT ?, role, content FROM loan_chat WHERE loan_id=? ORDER BY id`, toID, fromID)
+	return err
+}

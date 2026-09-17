@@ -43,6 +43,10 @@ func (a *API) bank(w http.ResponseWriter, r *http.Request) error {
 		// 還沒按「接受」時，對話記在「提議」那筆上（申訴來回都在這裡）
 		chat, _ = a.Store.LoanChat(offer.ID)
 	}
+	if len(chat) == 0 {
+		// 保險：AI 可能把對話寫在別筆（提議／被拒／反提議），直接抓最近一筆
+		chat, _ = a.Store.LatestChat(uid)
+	}
 	hist, err := a.Store.LoanHistory(uid, 10)
 	if err != nil {
 		return err
@@ -182,6 +186,10 @@ func (a *API) bankAppeal(w http.ResponseWriter, r *http.Request) error {
 	updated, _ := a.Store.DeniedApplication(uid)
 	if updated == nil {
 		updated, _ = a.Store.ActiveLoan(uid)
+	}
+	if updated != nil && updated.ID != loan.ID {
+		// AI 反提議會開新的一列，把剛才那幾句對話搬過去，否則玩家看不到
+		_ = a.Store.CopyLoanChat(loan.ID, updated.ID)
 	}
 	out := map[string]any{"ok": true, "decision": dec.Decision, "message": dec.Message,
 		"loan": updated, "appeals_left": domain.BankMaxAppeal - (loan.Appeals + 1), "granted": granted}
