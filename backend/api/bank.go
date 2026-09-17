@@ -390,7 +390,7 @@ func (a *API) catReview(user string, chips, amount, hours int, offeredRate float
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+a.AIAPIKey)
-	client := &http.Client{Timeout: 25 * time.Second}
+	client := &http.Client{Timeout: 8 * time.Second} // AI 掛掉時 8 秒就換規則式備援，別讓玩家等到以為卡住
 	resp, err := client.Do(req)
 	if err != nil {
 		return domain.FallbackReview(user, chips, amount, hours, offeredRate, reason, round), nil

@@ -163,8 +163,10 @@ func FallbackReview(user string, chips, amount, hours int, offeredRate float64, 
 	case offeredRate < BankMinOffer && !strings.Contains(reason, "老客戶") && !strings.Contains(reason, "準時"):
 		return BankDecision{Decision: "counter", Amount: amount, Hours: hours, Rate: BankMinOffer,
 			Message: fmt.Sprintf("喊 %.0f%% 就想借錢喵？我們這裡底線是 30%%　喵。要嘛 30%%，要嘛說個讓我信得過的理由喵。", offeredRate*100)}
-	case amount > chips*2:
-		return BankDecision{Decision: "deny", Amount: 0, Hours: 0, Message: fmt.Sprintf("借得比你身上還多兩倍喵？不行不行，%s，你先存點本錢再來喵。", user)}
+	case amount > chips*3+20000:
+		// 2026-09-17：原本是「借超過身家的 2 倍就拒絕」，結果破產的人最需要借錢卻借不到。
+		// 改成允許到身家 3 倍 + 2 萬（破產者至少能借到 2 萬翻身，違約照樣沒收一半財產）。
+		return BankDecision{Decision: "deny", Amount: 0, Hours: 0, Message: fmt.Sprintf("借這麼多喵？%s，你先存點本錢再來喵。", user)}
 	case strings.TrimSpace(reason) == "":
 		return BankDecision{Decision: "deny", Amount: 0, Hours: 0, Message: "連理由都不說就想借錢喵？回去想清楚再來喵。"}
 	case ratio > 1.2:

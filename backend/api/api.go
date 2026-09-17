@@ -77,6 +77,7 @@ func (a *API) Routes() *http.ServeMux {
 	mux.HandleFunc("GET /api/events", a.handler(a.events))
 	mux.HandleFunc("GET /api/history", a.handler(a.history))
 	mux.HandleFunc("GET /api/titles", a.handler(a.titles))
+	mux.HandleFunc("GET /api/bank/_debug", a.handler(a.bankDebug))
 	mux.HandleFunc("GET /api/bank", a.handler(a.bank))
 	mux.HandleFunc("POST /api/bank/apply", a.handler(a.bankApply))
 	mux.HandleFunc("POST /api/bank/appeal", a.handler(a.bankAppeal))

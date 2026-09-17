@@ -526,7 +526,6 @@ async function startPolish(st, force) {
     <div class="row" style="margin-top:10px">
       <button class="btn" id="pol-adv">再磨一層</button>
       <button class="btn danger" id="pol-cash">落袋</button>
-      <button class="btn ghost" id="pol-close">離開</button>
     </div>`;
   bg.appendChild(m);
   document.body.appendChild(bg);
@@ -585,7 +584,7 @@ async function startPolish(st, force) {
       loadWarehouse(); refreshMe();
     } catch (e) { toast(e.message); }
   });
-  m.querySelector('#pol-close').addEventListener('click', () => bg.remove());
+  const pc = m.querySelector('#pol-close'); if (pc) pc.addEventListener('click', () => bg.remove()); // 磨石進行中已移除離開鈕
 }
 
 // ---------- market ----------

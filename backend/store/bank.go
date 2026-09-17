@@ -228,8 +228,11 @@ func (s *Store) SetLoanAppealsTx(tx *sql.Tx, id, n int) error {
 // 用途：/api/bank 顯示申訴來回——AI 可能把對話寫在提議那筆而不是生效中的貸款，
 // 直接抓最近一筆最保險。
 func (s *Store) LatestChat(userID int) ([]map[string]string, error) {
+	// 挑「這名玩家擁有、且真的有對話」的那一筆，而且挑最新的。
+	// 不能只看最新一筆：AI 反提議會開新列放提議，對話留在舊列（2026-09-17 實測 #58 有 3 句、#59 有 0 句）。
 	var id int
-	if err := s.db.QueryRow(`SELECT id FROM loans WHERE user_id=? ORDER BY id DESC LIMIT 1`, userID).Scan(&id); err != nil {
+	err := s.db.QueryRow(`SELECT loan_id FROM loan_chat WHERE loan_id IN (SELECT id FROM loans WHERE user_id=?) ORDER BY id DESC LIMIT 1`, userID).Scan(&id)
+	if err != nil {
 		return []map[string]string{}, nil
 	}
 	return s.LoanChat(id)
@@ -250,4 +253,54 @@ func (s *Store) CopyLoanChat(fromID, toID int) error {
 	}
 	_, err := s.db.Exec(`INSERT INTO loan_chat (loan_id, role, content) SELECT ?, role, content FROM loan_chat WHERE loan_id=? ORDER BY id`, toID, fromID)
 	return err
+}
+
+// DebugLoanRows: 診斷用——這名玩家所有貸款列與每列的對話筆數。
+func (s *Store) DebugLoanRows(userID int) ([]map[string]any, error) {
+	out := []map[string]any{}
+	rows, err := s.db.Query(`SELECT id, user_id, status, principal, hours, appeals, created_at FROM loans WHERE user_id=? ORDER BY id DESC`, userID)
+	if err != nil {
+		return out, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, uid, appeals int
+		var status, created string
+		var principal, hours int
+		if err := rows.Scan(&id, &uid, &status, &principal, &hours, &appeals, &created); err != nil {
+			return out, err
+		}
+		// 注意：連線池只有 1 條，不能在 rows.Next() 迴圈裡再開查詢（會死鎖）
+		out = append(out, map[string]any{"id": id, "user_id": uid, "status": status,
+			"principal": principal, "hours": hours, "appeals": appeals, "created_at": created})
+	}
+	if err := rows.Err(); err != nil {
+		return out, err
+	}
+	for _, m := range out {
+		var n int
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM loan_chat WHERE loan_id=?`, m["id"]).Scan(&n); err == nil {
+			m["chat_rows"] = n
+		}
+	}
+	return out, nil
+}
+
+// DebugChatAll: 診斷用——整張 loan_chat 表的最後 20 列。
+func (s *Store) DebugChatAll() ([]map[string]any, error) {
+	out := []map[string]any{}
+	rows, err := s.db.Query(`SELECT id, loan_id, role, substr(content,1,40) FROM loan_chat ORDER BY id DESC LIMIT 20`)
+	if err != nil {
+		return out, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, loanID int
+		var role, content string
+		if err := rows.Scan(&id, &loanID, &role, &content); err != nil {
+			return out, err
+		}
+		out = append(out, map[string]any{"id": id, "loan_id": loanID, "role": role, "content": content})
+	}
+	return out, rows.Err()
 }
