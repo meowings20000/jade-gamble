@@ -465,7 +465,13 @@ function varietyKey(name) {
 
 // ---------- polish ----------
 async function doPolish(st) {
-  // 開磨前先選力度——種水已經定死，力度配不上就每層賭命。
+  // 已經在磨的石頭：直接續磨（後端會回傳目前層數），不要重選力度
+  try {
+    await startPolish(st);
+    return;
+  } catch (e) {
+    // 還沒開磨 → 往下顯示選力度
+  }
   const bg = document.createElement('div');
   bg.className = 'modal-bg';
   const m = document.createElement('div');
@@ -499,13 +505,15 @@ async function doPolish(st) {
   m.querySelectorAll('[data-force]').forEach((btn) => {
     btn.addEventListener('click', () => {
       bg.remove();
-      startPolish(st, Number(btn.dataset.force));
+      startPolish(st, Number(btn.dataset.force)).catch((e) => toast(e.message || String(e)));
     });
   });
 }
 
 async function startPolish(st, force) {
-  const res = await api('POST', '/api/polish/start', { stone_id: st.id, force });
+  const body = { stone_id: st.id };
+  if (force) body.force = force; // 不帶＝續磨既有的一輪
+  const res = await api('POST', '/api/polish/start', body);
   const bg = document.createElement('div');
   bg.className = 'modal-bg';
   const m = document.createElement('div');
