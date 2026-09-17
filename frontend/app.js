@@ -343,12 +343,12 @@ function showResultModal(title, res, st) {
   const m = document.createElement('div');
   m.className = 'modal';
   const win = res.payout > (st ? st.price : 0);
+  const gemKey = res.gem || ''; // 宣告必須在使用之前（原本寫在下面 → TDZ 錯誤）
   const eggHTML = gemKey
     ? `<div class="egg-banner">💎 彩蛋！這一刀切出來的不是玉——是 <b>${esc(res.gem_name || gemKey)}</b>！</div>`
     : (res.egg === 'bianhe'
     ? '<div class="egg-banner">卞和之石！神仙難斷寸玉，而你賭贏了傳說。</div>'
     : (res.egg === 'b_fake' ? '<div class="egg-banner">B貨騙局——皮殼表現全是偽裝，酸洗注膠。</div>' : ''));
-  const gemKey = res.gem || '';
   const showCutView = !!gemKey || (res.quality && ['砖头料','豆种','油青种','冰种','玻璃种'].includes(res.quality) && res.variety && res.variety !== '-');
   m.innerHTML = `
     <h3>${title}結果</h3>
