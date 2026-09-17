@@ -199,6 +199,7 @@ func (a *API) polishCash(w http.ResponseWriter, r *http.Request) error {
 	}
 	writeJSON(w, 200, map[string]any{
 		"payout": payout, "chips": bal, "stage": prog.Stage,
+		"polish": true, "stone_price": st.Price, "net": payout - st.Price,
 		"multiplier":      domain.PolishMultiplier(st, prog.Stage),
 		"quality":         st.Quality.Name(),
 		"variety":         st.Variety.Name(),

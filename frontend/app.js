@@ -342,7 +342,10 @@ function showResultModal(title, res, st) {
   bg.className = 'modal-bg';
   const m = document.createElement('div');
   m.className = 'modal';
-  const win = res.payout > (st ? st.price : 0);
+  // 磨石：落袋是 BaseValue × 倍率，成本要用「買入價」比；兩者不同，不能拿身價直接比
+  const cost = res.stone_price !== undefined ? Number(res.stone_price) : (st ? st.price : 0);
+  const net = res.net !== undefined ? Number(res.net) : (res.payout - cost);
+  const win = net >= 0;
   const gemKey = res.gem || ''; // 宣告必須在使用之前（原本寫在下面 → TDZ 錯誤）
   const eggHTML = gemKey
     ? `<div class="egg-banner">💎 彩蛋！這一刀切出來的不是玉——是 <b>${esc(res.gem_name || gemKey)}</b>！</div>`
@@ -354,7 +357,9 @@ function showResultModal(title, res, st) {
     <h3>${title}結果</h3>
     ${eggHTML}
     ${showCutView ? '<canvas id="cut-cv"></canvas>' : ''}
-    <div class="big-result ${win ? 'win' : 'lose'}">${win ? '+' : ''}${fmt(res.payout)} 喵喵幣</div>
+    <div class="big-result ${res.polish ? '' : (win ? 'win' : 'lose')}">${res.polish ? '' : (win ? '+' : '')}${fmt(res.payout)} 喵喵幣</div>
+    ${res.polish ? `<div class="kv"><span>成本（買入價）</span><b>${fmt(cost)}</b></div>
+    <div class="kv"><span>${net >= 0 ? '淨賺' : '淨賠'}</span><b style="color:${net >= 0 ? 'var(--green)' : 'var(--red)'}">${net >= 0 ? '+' : ''}${fmt(net)}</b></div>` : ''}
     <div class="kv"><span>${gemKey ? '寶石' : '品質'}</span><b>${gemKey ? esc(res.gem_name || gemKey) : res.quality}</b></div>
     ${gemKey ? '<div class="kv"><span>材質</span><b>不是玉石</b></div>' : `<div class="kv"><span>異色</span><b>${res.variety}</b></div>`}
     <div class="kv"><span>倍率</span><b>×${res.multiplier || (res.mult || '-')}</b></div>
