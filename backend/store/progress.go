@@ -191,3 +191,10 @@ func (s *Store) FinishPolish(stoneID string) error {
 	_, err := s.db.Exec(`UPDATE polish_progress SET alive=0 WHERE stone_id=?`, stoneID)
 	return err
 }
+
+// FinishPolishTx: 同上，但在既有交易內使用。
+// 注意：連線池只有 1 條，交易裡面絕對不能再呼叫會自己拿連線的 Store 方法（會死鎖）。
+func (s *Store) FinishPolishTx(tx *sql.Tx, stoneID string) error {
+	_, err := tx.Exec(`UPDATE polish_progress SET alive=0 WHERE stone_id=?`, stoneID)
+	return err
+}
