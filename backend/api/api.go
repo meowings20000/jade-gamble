@@ -177,6 +177,13 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) error {
 		"items": items, "discovered": varieties,
 		"is_admin": a.isAdmin(uid), "discord_id": u.DiscordID,
 		"frame": a.Store.EquippedFrame(uid),
+		"polish_running": func() int {
+			n, err := a.Store.PolishRunningCount(uid)
+			if err != nil {
+				return 0
+			}
+			return n
+		}(),
 	})
 	return nil
 }

@@ -167,3 +167,10 @@ func (s *Store) SavePolishProgress(stoneID string, userID, stage int, alive bool
 		stoneID, userID, stage, b2i(alive), breakMod, force)
 	return err
 }
+
+// PolishRunningCount: 這名玩家目前有幾顆石頭在磨（進行中、還沒落袋或磨崩）。
+func (s *Store) PolishRunningCount(userID int) (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM polish_progress WHERE user_id=? AND alive=1`, userID).Scan(&n)
+	return n, err
+}

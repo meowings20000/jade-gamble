@@ -470,8 +470,22 @@ async function doPolish(st) {
     await startPolish(st);
     return;
   } catch (e) {
-    // 還沒開磨 → 往下顯示選力度
+    // 還沒開磨（或這顆不是進行中的那顆）→ 往下走
   }
+  // 一次只能磨一顆：手上還有別顆在磨，先結算那顆再開新的
+  try {
+    const st2 = await api('GET', '/api/me');
+    const running = Number(st2.polish_running || 0);
+    if (running > 0) {
+      toast('你手上還有一顆在磨石，先把它落袋結算，才能開新的喵。');
+      return;
+    }
+  } catch (e) { /* 拿不到狀態就別擋 */ }
+  doPolishForcePicker(st);
+}
+
+// 選力度面板（開磨前、或還沒磨過一層想換力度時）
+function doPolishForcePicker(st) {
   const bg = document.createElement('div');
   bg.className = 'modal-bg';
   const m = document.createElement('div');
@@ -534,6 +548,7 @@ async function startPolish(st, force) {
     <div class="row" style="margin-top:10px">
       <button class="btn" id="pol-adv">再磨一層</button>
       <button class="btn danger" id="pol-cash">落袋</button>
+      ${Number(res.stage) === 0 ? '<button class="btn ghost" id="pol-reforce">換力度（還沒磨過）</button>' : ''}
       <button class="btn ghost" id="pol-close">暫時關掉（進度保留）</button>
     </div>`;
   bg.appendChild(m);
@@ -575,6 +590,8 @@ async function startPolish(st, force) {
         paintValue(rr.multiplier);
         m.querySelector('#pol-risk').textContent = pct(rr.break_prob) + (rr.stage === 0 ? '（第一層上限 25%）' : '');
         m.querySelector('#pol-feel').textContent = '👁 ' + rr.feel;
+        const rfBtn = m.querySelector('#pol-reforce');
+        if (rfBtn && Number(rr.stage) > 0) rfBtn.remove(); // 磨過一層就不能換力度了
         paintLadder(rr.stage);
         paintNext(rr.multiplier, res.ladder && res.ladder.top);
         if (rr.at_top) m.querySelector('#pol-adv').disabled = true;
@@ -593,7 +610,9 @@ async function startPolish(st, force) {
       loadWarehouse(); refreshMe();
     } catch (e) { toast(e.message); }
   });
-  const pc = m.querySelector('#pol-close'); if (pc) pc.addEventListener('click', () => bg.remove()); // 磨石進行中已移除離開鈕
+  const pc = m.querySelector('#pol-close'); if (pc) pc.addEventListener('click', () => bg.remove());
+  const pf = m.querySelector('#pol-reforce');
+  if (pf) pf.addEventListener('click', () => { bg.remove(); doPolishForcePicker(st); });
 }
 
 // ---------- market ----------

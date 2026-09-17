@@ -47,7 +47,15 @@ func (a *API) polishStart(w http.ResponseWriter, r *http.Request) error {
 		prog, _ = a.Store.GetPolishProgress(st.ID)
 	} else if body.Force >= domain.PolishForceLight && body.Force <= domain.PolishForceHeavy &&
 		body.Force != prog.Force {
-		return errors.New("力度開磨後不能改")
+		// 還沒磨掉任何一層（stage 0）＝只是選了力度還沒動工，可以反悔重選；
+		// 磨過一層之後就不能改（不然可以看手感再換，等於免費情報）。
+		if prog.Stage > 0 {
+			return errors.New("已經磨過一層了，力度不能再改")
+		}
+		if err := a.Store.SavePolishProgress(st.ID, uid, 0, true, prog.BreakMod, body.Force); err != nil {
+			return err
+		}
+		prog, _ = a.Store.GetPolishProgress(st.ID)
 	}
 	writeJSON(w, 200, map[string]any{
 		"stone_id": st.ID, "seed": seedStr(st.Seed),
