@@ -71,7 +71,8 @@ func TestPolishForceEconomics(t *testing.T) {
 			p := PolishBreakProb(st, f, 0)
 			v := PolishMultiplier(st, PolishMaxStage)
 			for s := PolishMaxStage - 1; s >= 0; s-- {
-				if c := (1 - p) * v; c > PolishMultiplier(st, s) {
+				// 磨崩不再是血本無歸：救回當前倍率的 PolishBreakSalvage
+				if c := (1-p)*v + p*PolishBreakSalvage*PolishMultiplier(st, s); c > PolishMultiplier(st, s) {
 					v = c
 				} else {
 					v = PolishMultiplier(st, s)
@@ -110,7 +111,7 @@ func TestPolishForceEconomics(t *testing.T) {
 		p := PolishBreakProb(st, f, 0)
 		v := PolishMultiplier(st, PolishMaxStage)
 		for s := PolishMaxStage - 1; s >= 0; s-- {
-			if c := (1 - p) * v; c > PolishMultiplier(st, s) {
+			if c := (1-p)*v + p*PolishBreakSalvage*PolishMultiplier(st, s); c > PolishMultiplier(st, s) {
 				v = c
 			} else {
 				v = PolishMultiplier(st, s)

@@ -26,19 +26,22 @@ const (
 	PolishMismatch  = 0.18 // 每差一級 +18% 爆裂率
 	PolishCrackRisk = 0.02 // 每條裂紋
 	PolishDeepRisk  = 0.06 // 深裂
-	PolishStepGain  = 1.20 // 每層倍率成長
+	PolishStepGain  = 1.22 // 每層倍率成長（2026-09-17 校準）
 	PolishStartMult = 0.93 // 開磨損耗 7%
-	PolishMaxStage  = 10   // 可爬層數
+	// PolishBreakSalvage: 磨崩時救回的比例（2026-09-17 用戶反映「怎麽樣也虧」）。
+	// 舊版崩了＝整顆石頭報廢（-100%），一次失手就吃掉上百層的收益；現在救回三成五。
+	PolishBreakSalvage = 0.30
+	PolishMaxStage     = 10 // 可爬層數
 )
 
 // polishBaseBreak: 力度完全配對時，每層的基礎爆裂率——種水就是耐磨度。
 // 玻璃種最耐，磚頭料最脆。
 var polishBaseBreak = map[Quality]float64{
-	Brick:    0.190,
-	Bean:     0.175,
-	OilGreen: 0.162,
-	Icy:      0.150,
-	Glass:    0.140,
+	Brick:    0.275,
+	Bean:     0.254,
+	OilGreen: 0.235,
+	Icy:      0.218,
+	Glass:    0.203,
 }
 
 // polishCeiling: 種水決定這顆料能被磨到多高。
@@ -166,6 +169,11 @@ func (p *PolishState) Advance(st *Stone, r Rand, breakModifier float64) (bool, i
 // CashPayout: stop and bank.
 func (p *PolishState) CashPayout(st *Stone, baseValue int) int {
 	return int(float64(baseValue) * PolishMultiplier(st, p.Stage))
+}
+
+// PolishBrokenPayout: 磨崩當下能救回的金額（當前倍率 × 35%）。
+func PolishBrokenPayout(st *Stone, stage, baseValue int) int {
+	return int(float64(baseValue) * PolishMultiplier(st, stage) * PolishBreakSalvage)
 }
 
 // PolishForceName: 力度名稱。

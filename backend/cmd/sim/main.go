@@ -15,6 +15,28 @@ import (
 	"jade-gamble/backend/domain"
 )
 
+// polishReport: 磨石每層期望值（配對／差一級），含新舊規則對照。
+// 舊規則＝崩了整顆報廢（報酬 0）；新規則＝救回當前倍率 35%。
+func polishReport() {
+	qs := []domain.Quality{domain.Brick, domain.Bean, domain.OilGreen, domain.Icy, domain.Glass}
+	fmt.Println("\n== 磨石每層期望值（EV/step）==")
+	fmt.Println("種水\t基礎爆裂\t配對EV(舊)\t配對EV(新)\t差一級EV(新)\t天花板倍率")
+	for _, q := range qs {
+		st := &domain.Stone{Quality: q}
+		p := domain.PolishBaseBreakFor(st)
+		pw := p + 0.18
+		if pw > 0.95 {
+			pw = 0.95
+		}
+		oldMatched := 1.20 * (1 - p)
+		newMatched := (1-p)*1.25 + p*0.35
+		newWrong := (1-pw)*1.25 + pw*0.35
+		fmt.Printf("%s\t%.1f%%\t%.4f\t%.4f\t%.4f\t%.2f×\n",
+			q.Name(), p*100, oldMatched, newMatched, newWrong, domain.PolishCeilingFor(st))
+	}
+	fmt.Println("（配對 EV > 1 ＝長期值得磨；差一級應 < 1 ＝選錯力度該立刻收手）")
+}
+
 func main() {
 	n := 20000
 	if len(os.Args) > 1 {
@@ -67,4 +89,5 @@ func main() {
 	}
 	fmt.Printf("全部：勝率 %.1f%%（%d/%d）| EV %.4f\n",
 		float64(tw)/float64(tn)*100, tw, tn, float64(tp)/float64(tpr))
+	polishReport()
 }

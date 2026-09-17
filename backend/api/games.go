@@ -54,8 +54,10 @@ func (a *API) polishStart(w http.ResponseWriter, r *http.Request) error {
 		"stage": prog.Stage, "multiplier": domain.PolishMultiplier(st, prog.Stage),
 		"ladder": map[string]any{
 			"start": domain.PolishStartMult, "gain": domain.PolishStepGain,
+			"base_value": st.BaseValue(), "cash_value": int(float64(st.BaseValue()) * domain.PolishMultiplier(st, prog.Stage)),
 			"top": domain.PolishCeilingFor(st), "max_stage": domain.PolishMaxStage,
 		},
+		"base_value": st.BaseValue(), "cash_value": int(float64(st.BaseValue()) * domain.PolishMultiplier(st, prog.Stage)), "stone_price": st.Price,
 		"alive": prog.Alive, "force": prog.Force, "force_name": domain.PolishForceName(prog.Force),
 		"break_prob": domain.PolishBreakProb(st, prog.Force, prog.BreakMod),
 		"feel":       domain.PolishFeel(st, prog.Force),
@@ -95,23 +97,34 @@ func (a *API) polishAdvance(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	resp := map[string]any{
-		"stage":      ps.Stage,
-		"multiplier": domain.PolishMultiplier(st, ps.Stage),
-		"alive":      alive,
-		"broke_at":   brokeAt,
-		"feel":       domain.PolishFeel(st, ps.Force),
-		"break_prob": domain.PolishBreakProb(st, ps.Force, prog.BreakMod),
-		"quality":    st.Quality.Name(),
-		"variety":    st.Variety.Name(),
-		"force":      ps.Force,
-		"force_name": domain.PolishForceName(ps.Force),
-		"at_top":     ps.Stage >= domain.PolishMaxStage,
+		"stage":       ps.Stage,
+		"multiplier":  domain.PolishMultiplier(st, ps.Stage),
+		"base_value":  st.BaseValue(),
+		"cash_value":  ps.CashPayout(st, st.BaseValue()),
+		"stone_price": st.Price,
+		"alive":       alive,
+		"broke_at":    brokeAt,
+		"feel":        domain.PolishFeel(st, ps.Force),
+		"break_prob":  domain.PolishBreakProb(st, ps.Force, prog.BreakMod),
+		"quality":     st.Quality.Name(),
+		"variety":     st.Variety.Name(),
+		"force":       ps.Force,
+		"force_name":  domain.PolishForceName(ps.Force),
+		"at_top":      ps.Stage >= domain.PolishMaxStage,
 	}
 	if !alive {
-		// 磨崩: stone destroyed. Insurance refunds 50% of base.
+		// 磨崩：石頭報廢，但救回當前倍率的 35%（2026-09-17：避免一次失手就血本無歸）
+		salvage := domain.PolishBrokenPayout(st, prog.Stage, st.BaseValue())
 		refund := 0
 		var bal int
 		if err := a.Store.WithTx(func(tx *store.Tx) error {
+			if salvage > 0 {
+				b, err := store.UpdateChipsTx(tx, uid, salvage)
+				if err != nil {
+					return err
+				}
+				bal = b
+			}
 			used, err := a.Store.ConsumeItemTx(tx, uid, "insurance")
 			if err != nil {
 				return err
@@ -131,6 +144,7 @@ func (a *API) polishAdvance(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 		resp["broke_at"] = brokeAt
+		resp["salvage"] = salvage
 		resp["insurance_refund"] = refund
 		resp["chips"] = bal
 	}

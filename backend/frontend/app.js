@@ -518,17 +518,22 @@ async function startPolish(st, force) {
   document.body.appendChild(bg);
   const ladder = m.querySelector('#pol-ladder');
   // 磨石要看到「實際值多少、賺還是賠」——不然不知道自己在賺還是在賠
-  const paintValue = (mult) => {
-    const v = Math.round(st.price * Number(mult));
-    const net = v - st.price;
+  // 顯示「伺服器真的會發多少」＝ BaseValue × 倍率（不是用你付的價格算，兩者不同）
+  const baseValue = Number(res.base_value || 0) || Math.round(st.price * Number(res.multiplier || 1));
+  const price = Number(res.stone_price || st.price || 0);
+  const paintValue = (mult, cashValue) => {
+    const v = cashValue !== undefined && cashValue !== null
+      ? Math.round(Number(cashValue))
+      : Math.round(baseValue * (Number(mult) / (Number(res.multiplier) || 1)));
+    const net = v - price;
     m.querySelector('#pol-value').textContent = fmt(v) + ' 喵喵幣';
     const netEl = m.querySelector('#pol-net');
     netEl.innerHTML = `<span style="color:${net >= 0 ? 'var(--green)' : 'var(--red)'}">${net >= 0 ? '+' : ''}${fmt(net)}</span>`;
     m.querySelector('#pol-cash').textContent = net >= 0
-      ? `落袋 ${fmt(v)}（賺 ${fmt(net)}）`
-      : `落袋 ${fmt(v)}（賠 ${fmt(-net)}）`;
+      ? `落袋實拿 ${fmt(v)}（成本 ${fmt(price)}・淨賺 ${fmt(net)}）`
+      : `落袋實拿 ${fmt(v)}（成本 ${fmt(price)}・淨賠 ${fmt(-net)}）`;
   };
-  paintValue(res.multiplier);
+  paintValue(res.multiplier, res.cash_value);
   const paintNext = (mult, top) => {
     const nextMult = Math.min(Number(mult) * 1.2, top || 99);
     const nv = Math.round(st.price * nextMult);
@@ -776,7 +781,7 @@ $('#yboss-bet').addEventListener('click', () => {
     <p style="font-size:13px;color:var(--muted);line-height:1.6">
       純粹的賭：壓上資金，選一條路。<br>
       <b>切一刀</b>——一翻兩瞪眼（EV 95%）。<br>
-      <b>磨石</b>——六層階梯 ×1.3 → ×7.5，每層稀有度更高、成功機率更低，磨崩歸零，隨時落袋。</p>
+      <b>磨石</b>——六層階梯 ×1.3 → ×7.5，每層稀有度更高、成功機率更低，磨崩救回三成，隨時落袋。</p>
     <div class="row" style="margin:10px 0">
       <input id="yb-stake" type="number" min="100" max="1000000" step="100" value="1000"
         style="flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:10px;border-radius:8px">
