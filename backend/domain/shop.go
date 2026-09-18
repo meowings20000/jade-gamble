@@ -71,8 +71,12 @@ var ExchangeCatalog = []ExchangeItem{
 		"1 小時表現料皮殼多標註一條真實特徵。"},
 	{"polish_touch", "磨石手感", 5000, "buff",
 		"1 小時磨崩機率 −8%。"},
-	{"frame_gold", "賭場金頭像框", 2500, "cosmetic", "純裝飾。"},
-	{"frame_imperial", "帝王綠頭像框", 5000, "cosmetic", "純裝飾。"},
+	{"frame_gold", "賭場金頭像框", 2500, "cosmetic", "純裝飾：金邊頭像。"},
+	{"frame_imperial", "帝王綠頭像框", 5000, "cosmetic", "純裝飾：帝王綠光暈。"},
+	{"frame_cat", "喵喵框", 1200, "cosmetic", "純裝飾：貓耳粉邊（最便宜的一框）。"},
+	{"frame_violet", "紫羅蘭框", 3500, "cosmetic", "純裝飾：紫羅蘭色光暈。"},
+	{"frame_ink", "墨翠框", 6000, "cosmetic", "純裝飾：墨翠沉綠。"},
+	{"frame_rainbow", "虹彩框", 12000, "cosmetic", "純裝飾：七彩流動，收藏級。"},
 }
 
 func ExchangeItemByKey(key string) (ExchangeItem, bool) {

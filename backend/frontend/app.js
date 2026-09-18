@@ -137,7 +137,7 @@ async function refreshMe() {
     $('#userbox').innerHTML =
       `<span class="avatar-ring ${me.frame ? esc(me.frame) : ''}">` +
       (me.avatar ? `<img src="${esc(me.avatar)}" alt="" referrerpolicy="no-referrer">` : '<span class="ph">🐾</span>') +
-      `</span><span>${(me.title ? `【${esc(me.title)}】` : '') + esc(me.username)}</span>`;
+      `</span><span>${(me.title ? `<b style="color:${TITLE_RARE[Number(me.title_rare) || 1] || 'var(--text)'}">【${esc(me.title)}】</b>` : '') + esc(me.username)}</span>`;
     // 管理員才看得到控制臺
     const navAdmin = $('#nav-admin');
     if (navAdmin) navAdmin.style.display = me.is_admin ? '' : 'none';
@@ -1142,7 +1142,7 @@ async function loadHistory() {
 
 
 // ---------- 稱號 ----------
-const TITLE_RARE = { 1: 'var(--muted)', 2: 'var(--text)', 3: 'var(--gold)', 4: '#e8b3ff' };
+const TITLE_RARE = { 1: '#c9c9c9', 2: '#5fd0ff', 3: '#c98bff', 4: '#d4a94e' };
 
 async function loadTitles() {
   const box = $('#title-grid');

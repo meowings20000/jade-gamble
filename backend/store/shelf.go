@@ -446,7 +446,7 @@ func (s *Store) MarkLit(stoneID string, userID int) error {
 
 // EquippedFrame: 玩家有沒有金的／帝王的頭像框（兌換所的裝飾品）。
 func (s *Store) EquippedFrame(userID int) string {
-	for _, key := range []string{"frame_imperial", "frame_gold"} {
+	for _, key := range []string{"frame_rainbow", "frame_ink", "frame_imperial", "frame_violet", "frame_gold", "frame_cat"} {
 		var n int
 		if err := s.db.QueryRow(`SELECT COUNT(*) FROM inventory_items WHERE user_id = ? AND item_key = ?`, userID, key).Scan(&n); err == nil && n > 0 {
 			return key

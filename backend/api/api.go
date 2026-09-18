@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"jade-gamble/backend/domain"
 	"net/http"
 	"net/url"
 	"strings"
@@ -177,6 +178,14 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) error {
 		"items": items, "discovered": varieties,
 		"is_admin": a.isAdmin(uid), "discord_id": u.DiscordID,
 		"frame": a.Store.EquippedFrame(uid),
+		"title_rare": func() int {
+			for _, t := range domain.Titles {
+				if t.Key == u.Title || t.Name == u.Title {
+					return t.Rare
+				}
+			}
+			return 0
+		}(),
 		"polish_running": func() int {
 			_ = a.Store.PurgeStalePolish(uid) // 幽靈紀錄清掉，免得把玩家卡死
 			ids, err := a.Store.PolishRunningStones(uid)
