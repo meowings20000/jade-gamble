@@ -515,14 +515,15 @@ function doPolishForcePicker(st) {
       這顆料的種水在你買下它時就定死了，<b>該用多大力度也跟著定死了</b>。<br>
       力度配得上，機器順暢一路上去；配不上，每一層都在賭命。<br>
       打法燈報告和皮殼表現猜猜看——選了就不能換。</p>
-    ${pick(1, '輕磨', '「這料吃不消重手」——<b>磚頭料</b>，或<b>有裂紋</b>的料（每條裂把理想力度往下拉半級、深裂再拉一級）。選對了每層爆裂率最低（磚頭料 22.8%）。')}
+    ${pick(1, '輕磨', '「這料吃不消重手」——<b>磚頭料</b>，或<b>有裂紋</b>的料（每條裂把理想力度往下拉半級、深裂再拉一級）。選對了爆裂率最低（磚頭料第一層 15.5%）。')}
     ${pick(2, '正磨', '<b>豆種、油青種</b>這種沒裂的標準料。不確定要選哪個，先選它最不容易大錯。')}
-    ${pick(3, '重磨', '只有<b>冰種、玻璃種</b>這種沒裂的好料壓得住（選對時爆裂率最低，玻璃種 16.8%）。壓在差料或有裂的料上＝每層都在賭命。')}
+    ${pick(3, '重磨', '只有<b>冰種、玻璃種</b>這種沒裂的好料壓得住（選對時爆裂率最低，玻璃種第一層 10.5%）。壓在差料或有裂的料上＝每層都在賭命。')}
     <div class="card" style="font-size:13px;line-height:1.7;margin-top:10px">
       <div style="color:var(--gold);font-weight:700;margin-bottom:4px">三種力度到底差在哪</div>
       • 開磨成本<b>三種都一樣</b>（×0.93），差別只在<b>每層的爆裂率</b>。<br>
-      • <b>選對力度</b>＝爆裂率最低：磚頭料 22.8%／豆種 21.0%／油青 19.4%／冰種 18.0%／玻璃種 16.8%。<br>
-      • <b>選錯一級 +18%</b>、錯兩級 +36%（可以在賭命）。<br>
+      • <b>選對力度</b>＝爆裂率最低（第一層）：磚頭料 15.5%／豆種 14.2%／油青 13.0%／冰種 11.7%／玻璃種 10.5%。<br>
+      • <b>但每一層都會更危險</b>：往後每多磨一層，爆裂率 <b>+2.5%</b>。就算全部選對，磨到第 4 層也已經累積約 <b>4 成</b>的爆裂風險——<b>選對只是提高成功率，不是無敵</b>。<br>
+      • <b>選錯一級 +18%</b>、錯兩級 +36%（每一層都在賭命）。<br>
       • 每層 <b>×1.22</b>；天花板由<b>種水</b>決定，跟力度無關：磚 5.0×／豆 5.5×／油青 6.0×／冰 7.0×／玻璃 8.0×。<br>
       • 磨崩<b>不會歸零</b>：救回當前倍率的 <b>10%</b>（失手一次很痛，讀對力度才划算）。<br>
       • 手感會誠實告訴你配不配——磨第一層之前不用錢，磨了就不能換力度。
@@ -559,7 +560,7 @@ async function startPolish(st, force) {
     <div class="kv"><span>目前倍率</span><b id="pol-mult2">×${Number(res.multiplier).toFixed(2)}</b></div>
     <div class="kv"><span>這顆料的價值</span><b style="color:var(--muted)">落袋那一刻才知道</b></div>
     <div class="ladder" id="pol-ladder"></div>
-    <div class="kv"><span>下一層爆裂機率（第一層最多 25%）</span><b id="pol-risk">${pct(res.break_prob)}</b></div>
+    <div class="kv"><span>下一層爆裂機率（每往後一層 +2.5%）</span><b id="pol-risk">${pct(res.break_prob)}</b></div>
     <div class="kv"><span>下一層倍率</span><b id="pol-next"></b></div>
     <p id="pol-feel" style="font-size:13px;color:var(--gold);margin:10px 0;line-height:1.6">👁 ${res.feel}</p>
     <p style="font-size:12px;color:var(--muted);margin:8px 0">
@@ -592,12 +593,15 @@ async function startPolish(st, force) {
     if (el) el.innerHTML = `×${nextMult.toFixed(2)}` + (top && nextMult >= top ? '（已到這顆料的天花板）' : '');
   };
   paintNext(res.multiplier, res.ladder && res.ladder.top);
+  const LS = (res.ladder && res.ladder.start) || 0.93;
+  const LG = (res.ladder && res.ladder.gain) || 1.22;
   const paintLadder = (stage) => {
     ladder.innerHTML = '';
     for (let i = 0; i <= 10; i++) {
       const el = document.createElement('span');
       el.className = 'rung' + (i < stage ? ' past' : '') + (i === stage ? ' cur' : '');
-      el.textContent = '×' + (0.93 * Math.pow(1.2, i) > res.ladder.top ? res.ladder.top : (0.93 * Math.pow(1.2, i)).toFixed(2));
+      const val = LS * Math.pow(LG, i);
+      el.textContent = '×' + (val > res.ladder.top ? res.ladder.top : val.toFixed(2));
       ladder.appendChild(el);
     }
   };

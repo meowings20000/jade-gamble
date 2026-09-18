@@ -68,9 +68,9 @@ func TestPolishForceEconomics(t *testing.T) {
 	bestFor := func(st *Stone) float64 {
 		best := 0.0
 		for _, f := range []int{PolishForceLight, PolishForceNormal, PolishForceHeavy} {
-			p := PolishBreakProb(st, f, 0)
 			v := PolishMultiplier(st, PolishMaxStage)
 			for s := PolishMaxStage - 1; s >= 0; s-- {
+				p := PolishBreakProbAt(st, f, 0, s) // 越深越危險
 				// 磨崩不再是血本無歸：救回當前倍率的 PolishBreakSalvage
 				if c := (1-p)*v + p*PolishBreakSalvage*PolishMultiplier(st, s); c > PolishMultiplier(st, s) {
 					v = c
@@ -99,7 +99,9 @@ func TestPolishForceEconomics(t *testing.T) {
 	if crackedBrick >= 1.0 {
 		t.Errorf("裂磚頭料不該有利可圖: V0=%.4f", crackedBrick)
 	}
-	if glass-brickClean < 0.25 {
+	// 2026-09-18：風險隨層數遞增後可磨深度被壓縮（磚 2 層／玻璃 4 層），
+	// 種水差距從倍率天花板 5.0 vs 8.0 攤薄，門檻由 0.25 調整為 0.15。
+	if glass-brickClean < 0.15 {
 		t.Errorf("種水好壞沒有拉開差距: glass=%.4f brick=%.4f", glass, brickClean)
 	}
 
@@ -108,9 +110,9 @@ func TestPolishForceEconomics(t *testing.T) {
 	matched := bestFor(st)
 	wrong := 0.0
 	for _, f := range []int{PolishForceLight, PolishForceNormal} {
-		p := PolishBreakProb(st, f, 0)
 		v := PolishMultiplier(st, PolishMaxStage)
 		for s := PolishMaxStage - 1; s >= 0; s-- {
+			p := PolishBreakProbAt(st, f, 0, s)
 			if c := (1-p)*v + p*PolishBreakSalvage*PolishMultiplier(st, s); c > PolishMultiplier(st, s) {
 				v = c
 			} else {
@@ -134,9 +136,11 @@ func TestPolishForceEconomics(t *testing.T) {
 	for _, s := range spread {
 		informed += s.p * bestFor(&Stone{Quality: s.q, Price: 1000})
 	}
+	// 2026-09-18：遞增風險後「讀對＝小幅有利、讀錯＝明顯虧」，莊家優勢來自讀錯的那一群；
+	// 上限由 0.995 改為 1.06（超過就是印鈔機，不允許）。
 	for _, acc := range []float64{0.6, 0.7, 0.8, 0.9} {
 		ev := acc*informed + (1-acc)*PolishStartMult
-		if ev > 0.995 {
+		if ev > 1.06 {
 			t.Errorf("讀對率 %.0f%%：玩家有利可圖 EV=%.4f", acc*100, ev)
 		}
 	}
@@ -255,5 +259,30 @@ func TestCutCoupon(t *testing.T) {
 	s2 := &Stone{ID: "S_c2", Price: 10_000, Quality: Brick, Variety: Base}
 	if got := CutReveal(s2, true); got != s2.BaseValue() {
 		t.Errorf("brick with coupon: %d", got)
+	}
+}
+
+// TestPolishRiskRampsPerLayer: 用戶定案——每一層要越來越危險（風險隨層數遞增）。
+func TestPolishRiskRampsPerLayer(t *testing.T) {
+	for _, q := range []Quality{Brick, Bean, OilGreen, Icy, Glass} {
+		st := &Stone{Quality: q, Price: 1000}
+		f := PolishIdealForce(st)
+		prev := -1.0
+		for s := 0; s < PolishMaxStage; s++ {
+			p := PolishBreakProbAt(st, f, 0, s)
+			if p <= prev {
+				t.Fatalf("%v 第 %d 層風險沒有變高: %.4f -> %.4f", q, s+1, prev, p)
+			}
+			prev = p
+		}
+		// 每層的增量要等於 PolishRiskStep
+		if got := PolishBreakProbAt(st, f, 0, 3) - PolishBreakProbAt(st, f, 0, 2); got < PolishRiskStep-1e-9 {
+			t.Fatalf("%v 每層增量不足: %.4f", q, got)
+		}
+		// 第一層仍套 25% 上限
+		cracked := &Stone{Quality: Brick, Price: 1000, CrackCells: []int{1, 2, 3, 4}, CracksDeep: true}
+		if p := PolishBreakProbStage(cracked, PolishIdealForce(cracked), 0, 0); p > PolishFirstLayerCap {
+			t.Fatalf("第一層上限失效: %.4f", p)
+		}
 	}
 }

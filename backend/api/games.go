@@ -101,11 +101,7 @@ func (a *API) polishStart(w http.ResponseWriter, r *http.Request) error {
 		"base_value": st.BaseValue(), "cash_value": int(float64(st.BaseValue()) * domain.PolishMultiplier(st, prog.Stage)), "stone_price": st.Price,
 		"alive": prog.Alive, "force": prog.Force, "force_name": domain.PolishForceName(prog.Force),
 		"break_prob": func() float64 {
-			pr := domain.PolishBreakProb(st, prog.Force, prog.BreakMod)
-			if prog.Stage == 0 && pr > domain.PolishFirstLayerCap {
-				pr = domain.PolishFirstLayerCap
-			}
-			return pr
+			return domain.PolishBreakProbStage(st, prog.Force, prog.BreakMod, prog.Stage)
 		}(),
 		"feel":   domain.PolishFeel(st, prog.Force),
 		"at_top": prog.Stage >= domain.PolishMaxStage,
@@ -152,7 +148,7 @@ func (a *API) polishAdvance(w http.ResponseWriter, r *http.Request) error {
 		"alive":       alive,
 		"broke_at":    brokeAt,
 		"feel":        domain.PolishFeel(st, ps.Force),
-		"break_prob":  domain.PolishBreakProb(st, ps.Force, prog.BreakMod),
+		"break_prob":  domain.PolishBreakProbStage(st, ps.Force, prog.BreakMod, prog.Stage),
 		"quality":     st.Quality.Name(),
 		"variety":     st.Variety.Name(),
 		"force":       ps.Force,

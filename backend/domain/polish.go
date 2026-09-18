@@ -23,11 +23,12 @@ const (
 	PolishForceNormal = 2
 	PolishForceHeavy  = 3
 
-	PolishMismatch  = 0.18 // 每差一級 +18% 爆裂率
-	PolishCrackRisk = 0.02 // 每條裂紋
-	PolishDeepRisk  = 0.06 // 深裂
-	PolishStepGain  = 1.22 // 每層倍率成長（2026-09-17 校準）
-	PolishStartMult = 0.93 // 開磨損耗 7%
+	PolishMismatch  = 0.18  // 每差一級 +18% 爆裂率
+	PolishCrackRisk = 0.02  // 每條裂紋
+	PolishDeepRisk  = 0.06  // 深裂
+	PolishStepGain  = 1.22  // 每層倍率成長（2026-09-17 校準）
+	PolishRiskStep  = 0.025 // 每多磨一層，爆裂率 +2.5%（2026-09-18 用戶定案：每一層要越來越危險）
+	PolishStartMult = 0.93  // 開磨損耗 7%
 	// PolishBreakSalvage: 磨崩時救回的比例（2026-09-17 用戶定案：只返還 10%）。
 	// 舊版崩了＝整顆石頭報廢（-100%），現在救回一成，失手的代價依然很痛但不會全滅。
 	PolishBreakSalvage = 0.10
@@ -39,11 +40,11 @@ const (
 var polishBaseBreak = map[Quality]float64{
 	// 2026-09-17 配合「磨崩只救回 10%」重新校準：爆裂率整體下調，
 	// 讓「讀對力度＝值得磨（EV/層 1.02~1.17）、讀錯＝明顯虧」仍然成立。
-	Brick:    0.228,
-	Bean:     0.210,
-	OilGreen: 0.194,
-	Icy:      0.180,
-	Glass:    0.168,
+	Brick:    0.155,
+	Bean:     0.142,
+	OilGreen: 0.130,
+	Icy:      0.117,
+	Glass:    0.105,
 }
 
 // polishCeiling: 種水決定這顆料能被磨到多高。
@@ -111,8 +112,16 @@ func PolishIdealForce(st *Stone) int {
 // PolishBreakProb: 這個力度用在這個石頭上，每層的爆裂機率。
 // 配對時最低；每差一級 +18%。
 func PolishBreakProb(st *Stone, force int, breakModifier float64) float64 {
+	return PolishBreakProbAt(st, force, breakModifier, 0)
+}
+
+// PolishBreakProbAt: 第 stage 層（0 起算）的爆裂機率——越深越危險。
+func PolishBreakProbAt(st *Stone, force int, breakModifier float64, stage int) float64 {
+	if stage < 0 {
+		stage = 0
+	}
 	mismatch := math.Abs(float64(force - PolishIdealForce(st)))
-	p := PolishBaseBreakFor(st) + PolishMismatch*mismatch - breakModifier
+	p := PolishBaseBreakFor(st) + PolishMismatch*mismatch - breakModifier + PolishRiskStep*float64(stage)
 	if st != nil {
 		p += PolishCrackRisk * float64(len(st.CrackCells))
 		if st.CracksDeep {
@@ -124,6 +133,15 @@ func PolishBreakProb(st *Stone, force int, breakModifier float64) float64 {
 	}
 	if p > 0.95 {
 		p = 0.95
+	}
+	return p
+}
+
+// PolishBreakProbStage: 對外用的每層爆裂機率——第 0 層仍套 25% 上限。
+func PolishBreakProbStage(st *Stone, force int, breakModifier float64, stage int) float64 {
+	p := PolishBreakProbAt(st, force, breakModifier, stage)
+	if stage <= 0 && p > PolishFirstLayerCap {
+		p = PolishFirstLayerCap
 	}
 	return p
 }
@@ -164,10 +182,7 @@ const PolishFirstLayerCap = 0.25
 
 // Advance rolls one more layer. Returns (alive, brokeAtStage).
 func (p *PolishState) Advance(st *Stone, r Rand, breakModifier float64) (bool, int) {
-	prob := PolishBreakProb(st, p.Force, breakModifier)
-	if p.Stage == 0 && prob > PolishFirstLayerCap {
-		prob = PolishFirstLayerCap
-	}
+	prob := PolishBreakProbStage(st, p.Force, breakModifier, p.Stage)
 	if r.Float64() < prob {
 		p.Alive = false
 		return false, p.Stage + 1
