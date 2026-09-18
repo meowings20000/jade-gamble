@@ -58,13 +58,13 @@ type ExchangeItem struct {
 
 var ExchangeCatalog = []ExchangeItem{
 	{"frenzy_ticket", "刮到爽門票", 2000, "consumable",
-		"10 顆休閒石立即開刮，每顆掉 1~100 籌碼，純解壓。"},
+		"10 顆休閒石立即開刮，每顆掉 1~100 喵喵幣，純解壓。"},
 	{"insurance", "保險券", 0, "consumable",
 		"磨崩退回 50% 石底價。價格＝磨石標的底價的 15%（購買時自動計）。"},
 	{"double_coupon", "雙倍券", 3000, "consumable",
 		"下一刀切石賠率 ×2（磚頭料不救）。"},
 	{"free_refresh", "免費刷新券", 5000, "consumable",
-		"任一檔貨架刷新 0 元一次，不佔當日遞增費率。"},
+		"任一檔貨架免費刷新一次（當日遞增次數照算，適合價格已經漲上去時用）。"},
 	{"light_master", "打燈大師卡", 2000, "buff",
 		"24 小時打燈報告半價，誤導率 30%→22%。"},
 	{"golden_eye", "黃金瞳殘光", 10000, "buff",

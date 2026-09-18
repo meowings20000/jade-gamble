@@ -28,20 +28,22 @@ const (
 	PolishDeepRisk  = 0.06 // 深裂
 	PolishStepGain  = 1.22 // 每層倍率成長（2026-09-17 校準）
 	PolishStartMult = 0.93 // 開磨損耗 7%
-	// PolishBreakSalvage: 磨崩時救回的比例（2026-09-17 用戶反映「怎麽樣也虧」）。
-	// 舊版崩了＝整顆石頭報廢（-100%），一次失手就吃掉上百層的收益；現在救回三成五。
-	PolishBreakSalvage = 0.30
+	// PolishBreakSalvage: 磨崩時救回的比例（2026-09-17 用戶定案：只返還 10%）。
+	// 舊版崩了＝整顆石頭報廢（-100%），現在救回一成，失手的代價依然很痛但不會全滅。
+	PolishBreakSalvage = 0.10
 	PolishMaxStage     = 10 // 可爬層數
 )
 
 // polishBaseBreak: 力度完全配對時，每層的基礎爆裂率——種水就是耐磨度。
 // 玻璃種最耐，磚頭料最脆。
 var polishBaseBreak = map[Quality]float64{
-	Brick:    0.275,
-	Bean:     0.254,
-	OilGreen: 0.235,
-	Icy:      0.218,
-	Glass:    0.203,
+	// 2026-09-17 配合「磨崩只救回 10%」重新校準：爆裂率整體下調，
+	// 讓「讀對力度＝值得磨（EV/層 1.02~1.17）、讀錯＝明顯虧」仍然成立。
+	Brick:    0.228,
+	Bean:     0.210,
+	OilGreen: 0.194,
+	Icy:      0.180,
+	Glass:    0.168,
 }
 
 // polishCeiling: 種水決定這顆料能被磨到多高。

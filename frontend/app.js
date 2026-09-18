@@ -366,7 +366,7 @@ function showResultModal(title, res, st) {
     ${res.first_discovery ? `<div class="egg-banner">🆕 圖鑑新發現：${res.variety}（收藏分 +${res.collection_gain}）</div>` : ''}
     ${res.title_awarded ? `<div class="egg-banner">🏅 獲得稱號：${res.title_awarded}</div>` : ''}
     ${res.broke_at !== undefined ? `<div class="kv"><span>磨崩於第</span><b>${res.broke_at} 層</b></div>` : ''}
-    ${res.salvage ? `<div class="kv"><span>磨崩救回（當前倍率 30%）</span><b style="color:var(--gold)">+${fmt(res.salvage)}</b></div>` : ''}
+    ${res.salvage ? `<div class="kv"><span>磨崩救回（當前倍率 10%）</span><b style="color:var(--gold)">+${fmt(res.salvage)}</b></div>` : ''}
     ${res.insurance_refund ? `<div class="kv"><span>保險理賠</span><b>+${fmt(res.insurance_refund)}</b></div>` : ''}
     <div class="row" style="margin-top:14px"><button class="btn" id="m-close">收下</button></div>`;
   bg.appendChild(m);
@@ -492,16 +492,16 @@ function doPolishForcePicker(st) {
       這顆料的種水在你買下它時就定死了，<b>該用多大力度也跟著定死了</b>。<br>
       力度配得上，機器順暢一路上去；配不上，每一層都在賭命。<br>
       打法燈報告和皮殼表現猜猜看——選了就不能換。</p>
-    ${pick(1, '輕磨', '「這料吃不消重手」——<b>磚頭料</b>，或<b>有裂紋</b>的料（每條裂把理想力度往下拉半級、深裂再拉一級）。選對了每層爆裂率最低（磚頭料 27.5%）。')}
+    ${pick(1, '輕磨', '「這料吃不消重手」——<b>磚頭料</b>，或<b>有裂紋</b>的料（每條裂把理想力度往下拉半級、深裂再拉一級）。選對了每層爆裂率最低（磚頭料 22.8%）。')}
     ${pick(2, '正磨', '<b>豆種、油青種</b>這種沒裂的標準料。不確定要選哪個，先選它最不容易大錯。')}
-    ${pick(3, '重磨', '只有<b>冰種、玻璃種</b>這種沒裂的好料壓得住（選對時爆裂率最低，玻璃種 20.3%）。壓在差料或有裂的料上＝每層都在賭命。')}
+    ${pick(3, '重磨', '只有<b>冰種、玻璃種</b>這種沒裂的好料壓得住（選對時爆裂率最低，玻璃種 16.8%）。壓在差料或有裂的料上＝每層都在賭命。')}
     <div class="card" style="font-size:13px;line-height:1.7;margin-top:10px">
       <div style="color:var(--gold);font-weight:700;margin-bottom:4px">三種力度到底差在哪</div>
       • 開磨成本<b>三種都一樣</b>（×0.93），差別只在<b>每層的爆裂率</b>。<br>
-      • <b>選對力度</b>＝爆裂率最低：磚頭料 27.5%／豆種 25.4%／油青 23.5%／冰種 21.8%／玻璃種 20.3%。<br>
+      • <b>選對力度</b>＝爆裂率最低：磚頭料 22.8%／豆種 21.0%／油青 19.4%／冰種 18.0%／玻璃種 16.8%。<br>
       • <b>選錯一級 +18%</b>、錯兩級 +36%（可以在賭命）。<br>
       • 每層 <b>×1.22</b>；天花板由<b>種水</b>決定，跟力度無關：磚 5.0×／豆 5.5×／油青 6.0×／冰 7.0×／玻璃 8.0×。<br>
-      • 磨崩<b>不會歸零</b>：救回當前倍率的 30%。<br>
+      • 磨崩<b>不會歸零</b>：救回當前倍率的 <b>10%</b>（失手一次很痛，讀對力度才划算）。<br>
       • 手感會誠實告訴你配不配——磨第一層之前不用錢，磨了就不能換力度。
     </div>
     <div class="row" style="margin-top:6px"><button class="btn ghost" id="pol-cancel">離開</button></div>`;
