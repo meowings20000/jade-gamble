@@ -32,7 +32,7 @@ func (s *Store) CountUsers() (int, error) {
 // it must not clobber refreshed_today on every call.
 // EnsureShelf: 建立貨架列；跨日時把整排清空（隔天免費補貨一次的起點）。
 // 回傳 newDay = 這次呼叫是否跨日（呼叫端據此決定要不要真的生石頭）。
-func (s *Store) EnsureShelf(userID int, date string) (bool, error) {
+func (s *Store) EnsureShelf(userID int, date, bucket string) (bool, error) {
 	for g := domain.KiloGrade; g <= domain.WindowGrade; g++ {
 		for slot := 0; slot < domain.ShelfSize(g); slot++ {
 			_, err := s.db.Exec(`INSERT OR IGNORE INTO shelves (user_id, grade, slot, restock_date) VALUES (?,?,?,?)`,
@@ -41,6 +41,11 @@ func (s *Store) EnsureShelf(userID int, date string) (bool, error) {
 				return false, err
 			}
 		}
+	}
+	// 每 12 小時重置「刷新價格階梯」（次數歸零），跟每日補貨是兩件事
+	if _, err := s.db.Exec(`UPDATE shelves SET refreshed_today = 0, refresh_bucket = ?
+		WHERE user_id = ? AND refresh_bucket <> ?`, bucket, userID, bucket); err != nil {
+		return false, err
 	}
 	res, err := s.db.Exec(`UPDATE shelves SET refreshed_today = 0, restock_date = ?,
 		stone_id = NULL
@@ -448,4 +453,11 @@ func (s *Store) EquippedFrame(userID int) string {
 		}
 	}
 	return ""
+}
+
+// ShelfItemCount: 這個檔位的貨架上還有幾顆石頭（賣光時刷新應該免費）。
+func (s *Store) ShelfItemCount(userID int, grade domain.ShopGrade) (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(stone_id) FROM shelves WHERE user_id=? AND grade=?`, userID, int(grade)).Scan(&n)
+	return n, err
 }

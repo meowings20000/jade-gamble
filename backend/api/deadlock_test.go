@@ -15,6 +15,8 @@ func TestShopRefreshNoDeadlock(t *testing.T) {
 	srv, _ := setup(t)
 	c := newClient(t, srv, "refresher")
 
+	// 先看一次商店讓貨架補滿（賣光狀態下的刷新是免費＋重置階梯，不算漲價）
+	_ = c.do("GET", "/api/shop", nil)
 	type res struct {
 		grade int
 	}

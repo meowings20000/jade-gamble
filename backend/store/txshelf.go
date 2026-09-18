@@ -16,3 +16,9 @@ func (s *Store) IncRefreshTx(tx *Tx, userID int, grade domain.ShopGrade, date st
 		WHERE user_id=? AND grade=? AND restock_date=? AND slot=0`, userID, int(grade), date)
 	return err
 }
+
+// ResetRefreshTx: 把這個檔位的刷新價格階梯歸零（貨架賣光時用）。
+func (s *Store) ResetRefreshTx(tx *Tx, userID int, grade domain.ShopGrade) error {
+	_, err := tx.Exec(`UPDATE shelves SET refreshed_today = 0 WHERE user_id=? AND grade=?`, userID, int(grade))
+	return err
+}

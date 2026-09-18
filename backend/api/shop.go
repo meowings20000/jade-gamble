@@ -11,6 +11,16 @@ import (
 
 func today() string { return time.Now().Format("2006-01-02") }
 
+// refreshBucket: 刷新價格階梯的分輪字串——每 12 小時一輪（00:00~11:59 / 12:00~23:59）。
+// 隔一輪次數就歸零，所以價格最多漲到當天那一輪撐得住的程度。
+func refreshBucket() string {
+	n := time.Now()
+	if n.Hour() < 12 {
+		return n.Format("2006-01-02") + "A"
+	}
+	return n.Format("2006-01-02") + "B"
+}
+
 func nowUTC() string { return time.Now().UTC().Format(time.RFC3339) }
 
 // shopView returns the user's three shelves with visible stone info.
@@ -20,7 +30,7 @@ func (a *API) shopView(w http.ResponseWriter, r *http.Request) error {
 	if !ok {
 		return nil
 	}
-	newDay, err := a.Store.EnsureShelf(uid, today())
+	newDay, err := a.Store.EnsureShelf(uid, today(), refreshBucket())
 	if err != nil {
 		return err
 	}
@@ -120,7 +130,7 @@ func (a *API) shopRefresh(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("未知档位")
 	}
 	// shelves rows must exist before we can clear/fill them
-	if _, err := a.Store.EnsureShelf(uid, today()); err != nil {
+	if _, err := a.Store.EnsureShelf(uid, today(), refreshBucket()); err != nil {
 		return err
 	}
 	refreshes, err := a.Store.CountShelfRefreshes(uid, g, today())
@@ -128,11 +138,38 @@ func (a *API) shopRefresh(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	cost := domain.RefreshPrice(g, refreshes)
+	// 貨架賣光＝沒東西可買，刷新不該懲罰玩家：免費，而且不累加階梯
+	shelfN, _ := a.Store.ShelfItemCount(uid, g)
+	emptyShelf := shelfN == 0
+	if emptyShelf {
+		cost = 0
+	}
 
 	// Single atomic transaction: consume coupon if held, else charge; refill.
 	// NOTE: everything inside must be Tx-aware — the pool is MaxOpenConns(1),
 	// any non-tx store call inside the closure deadlocks.
 	if err := a.Store.WithTx(func(tx *store.Tx) error {
+		if emptyShelf {
+			// 賣光＝沒東西可買：這次免費，而且把階梯歸零，讓他補貨不用被漲價懲罰
+			if err := a.Store.ResetRefreshTx(tx, uid, g); err != nil {
+				return err
+			}
+			if err := a.Store.ClearShelfTx(tx, uid, g); err != nil {
+				return err
+			}
+			for i := 0; i < domain.ShelfSize(g); i++ {
+				st := domain.GenerateStone(g, domain.RandSource)
+				st.OwnerID = uid
+				st.State = domain.StateShop
+				if err := a.Store.SaveStoneTx(tx, st); err != nil {
+					return err
+				}
+				if err := a.Store.FillShelfSlotTx(tx, uid, g, st.ID); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
 		usedCoupon, err := a.Store.ConsumeItemTx(tx, uid, "free_refresh")
 		if err != nil {
 			return err
@@ -160,7 +197,7 @@ func (a *API) shopRefresh(w http.ResponseWriter, r *http.Request) error {
 				return err
 			}
 		}
-		// 用券也要累加當日次數：否則拿著券就能永遠用基準價刷新（價格不會漲）
+		// 用券也要累加當次次數：否則拿著券就能永遠用基準價刷新（價格不會漲）
 		return a.Store.IncRefreshTx(tx, uid, g, today())
 	}); err != nil {
 		return err

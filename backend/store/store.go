@@ -35,6 +35,7 @@ func Open(path string) (*Store, error) {
 func (s *Store) Close() error { return s.db.Close() }
 
 func (s *Store) migrate() error {
+	// 貨架的「價格階梯」用 12 小時為一輪（內容補貨仍是每天一次）
 	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS relief_log (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_id INTEGER NOT NULL,
@@ -307,6 +308,8 @@ func (s *Store) migrate() error {
 		!strings.Contains(err.Error(), "duplicate column") {
 		return fmt.Errorf("migrate loans hours: %w", err)
 	}
+	// 貨架刷新價格階梯：每 12 小時一輪（內容補貨仍每日一次）
+	_, _ = s.db.Exec(`ALTER TABLE shelves ADD COLUMN refresh_bucket TEXT NOT NULL DEFAULT ''`)
 	if _, err := s.db.Exec(`ALTER TABLE users ADD COLUMN daily_win_date TEXT NOT NULL DEFAULT ''`); err != nil &&
 		!strings.Contains(err.Error(), "duplicate column") {
 		return fmt.Errorf("migrate daily_win_date: %w", err)
