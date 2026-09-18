@@ -23,28 +23,47 @@ const (
 	PolishForceNormal = 2
 	PolishForceHeavy  = 3
 
-	PolishMismatch  = 0.18  // 每差一級 +18% 爆裂率
-	PolishCrackRisk = 0.02  // 每條裂紋
-	PolishDeepRisk  = 0.06  // 深裂
-	PolishStepGain  = 1.22  // 每層倍率成長（2026-09-17 校準）
-	PolishRiskStep  = 0.025 // 每多磨一層，爆裂率 +2.5%（2026-09-18 用戶定案：每一層要越來越危險）
-	PolishStartMult = 0.93  // 開磨損耗 7%
+	PolishMismatch  = 0.18 // 每差一級 +18% 爆裂率
+	PolishCrackRisk = 0.02 // 每條裂紋
+	PolishDeepRisk  = 0.06 // 深裂
+	PolishStepGain  = 1.22 // 每層倍率成長（2026-09-17 校準）
+	PolishStartMult = 0.93 // 開磨損耗 7%
 	// PolishBreakSalvage: 磨崩時救回的比例（2026-09-17 用戶定案：只返還 10%）。
 	// 舊版崩了＝整顆石頭報廢（-100%），現在救回一成，失手的代價依然很痛但不會全滅。
 	PolishBreakSalvage = 0.10
 	PolishMaxStage     = 10 // 可爬層數
 )
 
-// polishBaseBreak: 力度完全配對時，每層的基礎爆裂率——種水就是耐磨度。
-// 玻璃種最耐，磚頭料最脆。
-var polishBaseBreak = map[Quality]float64{
-	// 2026-09-17 配合「磨崩只救回 10%」重新校準：爆裂率整體下調，
-	// 讓「讀對力度＝值得磨（EV/層 1.02~1.17）、讀錯＝明顯虧」仍然成立。
-	Brick:    0.155,
-	Bean:     0.142,
-	OilGreen: 0.130,
-	Icy:      0.117,
-	Glass:    0.105,
+// PolishFirstLayerBreak / PolishDeepestBreak：2026-09-18 用戶定案——
+// 第一層成功率 90%（爆裂 10%），最深一層成功率 25%（爆裂 75%），逐層遞減。
+// 配對力度就能拿到這條曲線；選錯一級每層 +18%、裂紋再往上加。
+const (
+	PolishFirstLayerBreak = 0.10
+	PolishDeepestBreak    = 0.75
+)
+
+// PolishMaxStageFor: 這顆料能爬到第幾層（種水天花板決定的最後一層）。
+func PolishMaxStageFor(st *Stone) int {
+	n := PolishMaxStage - 1
+	if st == nil {
+		return n
+	}
+	if cap := PolishCeilingFor(st); cap > 0 {
+		k := int(math.Floor(math.Log(cap/PolishStartMult) / math.Log(PolishStepGain)))
+		if k < n {
+			n = k
+		}
+	}
+	if n < 1 {
+		n = 1
+	}
+	return n
+}
+
+// PolishRiskStepFor: 每層的爆裂率增量——從第一層 10% 一路升到「最低那層」75%
+// （種水越好、能爬越深，因此每層漲得越慢＝越耐磨）。
+func PolishRiskStepFor(st *Stone) float64 {
+	return (PolishDeepestBreak - PolishFirstLayerBreak) / float64(PolishMaxStageFor(st))
 }
 
 // polishCeiling: 種水決定這顆料能被磨到多高。
@@ -56,15 +75,9 @@ var polishCeiling = map[Quality]float64{
 	Glass:    8.0,
 }
 
-// PolishBaseBreakFor: 這顆料的基礎爆裂率。
+// PolishBaseBreakFor: 配對力度時第一層的爆裂率（共用曲線起點）。
 func PolishBaseBreakFor(st *Stone) float64 {
-	if st == nil {
-		return 0.162
-	}
-	if v, ok := polishBaseBreak[st.Quality]; ok {
-		return v
-	}
-	return 0.162
+	return PolishFirstLayerBreak
 }
 
 // PolishCeilingFor: 這顆料的倍率天花板（種水越好，磨得越高）。
@@ -121,7 +134,7 @@ func PolishBreakProbAt(st *Stone, force int, breakModifier float64, stage int) f
 		stage = 0
 	}
 	mismatch := math.Abs(float64(force - PolishIdealForce(st)))
-	p := PolishBaseBreakFor(st) + PolishMismatch*mismatch - breakModifier + PolishRiskStep*float64(stage)
+	p := PolishBaseBreakFor(st) + PolishMismatch*mismatch - breakModifier + PolishRiskStepFor(st)*float64(stage)
 	if st != nil {
 		p += PolishCrackRisk * float64(len(st.CrackCells))
 		if st.CracksDeep {

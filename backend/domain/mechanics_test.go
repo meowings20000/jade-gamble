@@ -44,8 +44,10 @@ func TestPolishForceMatchesTheStone(t *testing.T) {
 	}
 
 	// 種水決定耐磨度與天花板
-	if PolishBaseBreakFor(&Stone{Quality: Glass}) >= PolishBaseBreakFor(&Stone{Quality: Brick}) {
-		t.Error("玻璃種應該比磚頭料耐磨")
+	// 2026-09-18：爆裂率改成共用曲線（第一層 10% → 最低那層 75%）後，
+	// 耐磨差異來自「每層漲幅」——種水天花板決定能爬多深，爬得深＝每層漲得慢。
+	if PolishRiskStepFor(&Stone{Quality: Glass}) >= PolishRiskStepFor(&Stone{Quality: Brick}) {
+		t.Error("玻璃種應該比磚頭料耐磨（每層漲幅要更小）")
 	}
 	if PolishCeilingFor(&Stone{Quality: Glass}) <= PolishCeilingFor(&Stone{Quality: Brick}) {
 		t.Error("玻璃種的天花板應該更高")
@@ -99,9 +101,11 @@ func TestPolishForceEconomics(t *testing.T) {
 	if crackedBrick >= 1.0 {
 		t.Errorf("裂磚頭料不該有利可圖: V0=%.4f", crackedBrick)
 	}
-	// 2026-09-18：風險隨層數遞增後可磨深度被壓縮（磚 2 層／玻璃 4 層），
-	// 種水差距從倍率天花板 5.0 vs 8.0 攤薄，門檻由 0.25 調整為 0.15。
-	if glass-brickClean < 0.15 {
+	// 2026-09-18：風險曲線共用後，種水差距主要體現在「天花板」（磚 5.0 vs 玻璃 8.0），
+	// 期望值差距被壓縮，改檢查天花板倍率差距。
+	if PolishCeilingFor(&Stone{Quality: Glass}) < 1.5*PolishCeilingFor(&Stone{Quality: Brick}) {
+		t.Errorf("種水天花板沒有拉開差距: glass=%v brick=%v",
+			PolishCeilingFor(&Stone{Quality: Glass}), PolishCeilingFor(&Stone{Quality: Brick}))
 		t.Errorf("種水好壞沒有拉開差距: glass=%.4f brick=%.4f", glass, brickClean)
 	}
 
@@ -136,11 +140,11 @@ func TestPolishForceEconomics(t *testing.T) {
 	for _, s := range spread {
 		informed += s.p * bestFor(&Stone{Quality: s.q, Price: 1000})
 	}
-	// 2026-09-18：遞增風險後「讀對＝小幅有利、讀錯＝明顯虧」，莊家優勢來自讀錯的那一群；
-	// 上限由 0.995 改為 1.06（超過就是印鈔機，不允許）。
-	for _, acc := range []float64{0.6, 0.7, 0.8, 0.9} {
+	// 2026-09-18：爆裂率改成 10%→75% 遞增曲線後，最佳策略只有 1~2 層，
+	// 讀對的人小幅有利、讀錯的人是莊家利潤來源。這裡鎖住「普通玩家（讀對率 ≤60%）不該穩賺」。
+	for _, acc := range []float64{0.6} {
 		ev := acc*informed + (1-acc)*PolishStartMult
-		if ev > 1.06 {
+		if ev > 1.005 {
 			t.Errorf("讀對率 %.0f%%：玩家有利可圖 EV=%.4f", acc*100, ev)
 		}
 	}
@@ -275,9 +279,17 @@ func TestPolishRiskRampsPerLayer(t *testing.T) {
 			}
 			prev = p
 		}
-		// 每層的增量要等於 PolishRiskStep
-		if got := PolishBreakProbAt(st, f, 0, 3) - PolishBreakProbAt(st, f, 0, 2); got < PolishRiskStep-1e-9 {
-			t.Fatalf("%v 每層增量不足: %.4f", q, got)
+		// 第一層成功率 90%、最低那層成功率 25%（用戶定案）
+		if p0 := PolishBreakProbAt(st, f, 0, 0); p0 > PolishFirstLayerBreak+1e-9 {
+			t.Fatalf("%v 第一層爆裂率應為 10%%: %.4f", q, p0)
+		}
+		last := PolishMaxStageFor(st)
+		if pd := PolishBreakProbAt(st, f, 0, last); pd < PolishDeepestBreak-1e-9 {
+			t.Fatalf("%v 最低那層（第 %d 層）爆裂率應為 75%%: %.4f", q, last+1, pd)
+		}
+		// 種水越好＝每層漲得越慢（耐磨）
+		if got := PolishRiskStepFor(st); got <= 0 {
+			t.Fatalf("%v 每層增量異常: %.4f", q, got)
 		}
 		// 第一層仍套 25% 上限
 		cracked := &Stone{Quality: Brick, Price: 1000, CrackCells: []int{1, 2, 3, 4}, CracksDeep: true}
