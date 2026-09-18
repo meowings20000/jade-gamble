@@ -77,6 +77,11 @@ var ExchangeCatalog = []ExchangeItem{
 	{"frame_violet", "紫羅蘭框", 3500, "cosmetic", "純裝飾：紫羅蘭色光暈。"},
 	{"frame_ink", "墨翠框", 6000, "cosmetic", "純裝飾：墨翠沉綠。"},
 	{"frame_rainbow", "虹彩框", 12000, "cosmetic", "純裝飾：七彩流動，收藏級。"},
+	{"theme_jade", "賭桌配色・翠玉", 3000, "cosmetic", "把整個介面換成翠玉桌布（深綠玉色）。"},
+	{"theme_violet", "賭桌配色・紫氣", 5000, "cosmetic", "紫羅蘭夜色桌布。"},
+	{"theme_ink", "賭桌配色・墨玉", 7000, "cosmetic", "墨翠沉綠，最耐看。"},
+	{"theme_gold", "賭桌配色・金碧", 10000, "cosmetic", "金碧輝煌，土豪專用。"},
+	{"fx_confetti", "開箱彩帶特效", 4000, "cosmetic", "切石／落袋賺大錢時噴彩帶（靠自己打出好料才會噴）。"},
 }
 
 func ExchangeItemByKey(key string) (ExchangeItem, bool) {

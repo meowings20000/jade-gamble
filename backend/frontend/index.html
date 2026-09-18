@@ -10,6 +10,14 @@
   --text:#e8e2d8; --muted:#9a8f80; --gold:#d4a94e; --green:#5fb877;
   --red:#d46a5a; --glow:#f3d47c;
 }
+/* 兌換所收藏：賭桌配色（同時擁有時顯示最貴的） */
+body.theme_jade{--bg:#0d1a15;--panel:#12241d;--panel2:#173027;--line:#245041;--gold:#7ef0c0}
+body.theme_violet{--bg:#150f1e;--panel:#1d1430;--panel2:#251a3d;--line:#3d2a63;--gold:#c98bff}
+body.theme_ink{--bg:#0b1412;--panel:#12201c;--panel2:#172a24;--line:#1f4038;--gold:#1f9e77}
+body.theme_gold{--bg:#1a1408;--panel:#241c0c;--panel2:#2e2410;--line:#54431a;--gold:#f0c451}
+/* 開箱彩帶特效 */
+@keyframes confetti-fall{0%{transform:translateY(-10vh) rotate(0);opacity:1}100%{transform:translateY(105vh) rotate(540deg);opacity:0}}
+.confetti{position:fixed;top:0;width:8px;height:14px;z-index:9999;pointer-events:none;animation:confetti-fall linear forwards}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:"Noto Sans TC",system-ui,sans-serif;min-height:100vh}
 header{display:flex;align-items:center;gap:16px;padding:12px 20px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:50}

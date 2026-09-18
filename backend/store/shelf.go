@@ -461,3 +461,27 @@ func (s *Store) ShelfItemCount(userID int, grade domain.ShopGrade) (int, error) 
 	err := s.db.QueryRow(`SELECT COUNT(stone_id) FROM shelves WHERE user_id=? AND grade=?`, userID, int(grade)).Scan(&n)
 	return n, err
 }
+
+// OwnsItem: 玩家有沒有這件收藏品。
+func (s *Store) OwnsItem(userID int, key string) bool {
+	var n int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM inventory_items WHERE user_id = ? AND item_key = ?`, userID, key).Scan(&n); err != nil {
+		return false
+	}
+	return n > 0
+}
+
+// EquippedTheme: 擁有的賭桌配色（貴的優先），沒有就空字串＝預設。
+func (s *Store) EquippedTheme(userID int) string {
+	for _, key := range []string{"theme_gold", "theme_ink", "theme_violet", "theme_jade"} {
+		if s.OwnsItem(userID, key) {
+			return key
+		}
+	}
+	return ""
+}
+
+// HasRevealFX: 有沒有開箱彩帶特效。
+func (s *Store) HasRevealFX(userID int) bool {
+	return s.OwnsItem(userID, "fx_confetti")
+}

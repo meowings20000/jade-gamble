@@ -133,6 +133,10 @@ async function refreshMe() {
   layoutMobileModes();
   if (logged) {
     setChips(me.chips);
+    // 兌換所收藏的賭桌配色（只換 body 上的 theme_* class）
+    document.body.className = document.body.className.replace(/\btheme_\w+\b/g, '').trim();
+    if (me.theme) document.body.classList.add(me.theme);
+    window.__hasFX = !!me.fx;
     // DC 頭像直接讀（OAuth 時存下來的 CDN 連結）＋兌換所的頭像框
     $('#userbox').innerHTML =
       `<span class="avatar-ring ${me.frame ? esc(me.frame) : ''}">` +
@@ -369,6 +373,9 @@ function showResultModal(title, res, st) {
     ${res.salvage ? `<div class="kv"><span>磨崩救回（當前倍率 10%）</span><b style="color:var(--gold)">+${fmt(res.salvage)}</b></div>` : ''}
     ${res.insurance_refund ? `<div class="kv"><span>保險理賠</span><b>+${fmt(res.insurance_refund)}</b></div>` : ''}
     <div class="row" style="margin-top:14px"><button class="btn" id="m-close">收下</button></div>`;
+  if (window.__hasFX && win && Number(String(res.multiplier || res.mult || 1)) >= 3) {
+    try { confettiBurst(); } catch (e) {}
+  }
   bg.appendChild(m);
   document.body.appendChild(bg);
   if (showCutView) {
@@ -448,6 +455,21 @@ async function doScratch(st) {
     } catch (e) { toast(e.message); }
   });
   m.querySelector('#scr-close').addEventListener('click', () => { board.destroy(); bg.remove(); });
+}
+
+// 開箱彩帶（兌換所收藏「開箱彩帶特效」；賺錢且倍率 ≥3 才噴）
+function confettiBurst() {
+  const colors = ['#ff6b6b', '#ffd93d', '#6bff95', '#5fd0ff', '#c98bff', '#d4a94e'];
+  for (let i = 0; i < 44; i++) {
+    const el = document.createElement('span');
+    el.className = 'confetti';
+    el.style.left = Math.random() * 100 + 'vw';
+    el.style.background = colors[i % colors.length];
+    el.style.animationDuration = (1.6 + Math.random() * 1.4) + 's';
+    el.style.animationDelay = (Math.random() * 0.5) + 's';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 3600);
+  }
 }
 
 function qualityKey(name) {
