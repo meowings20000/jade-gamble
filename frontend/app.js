@@ -592,12 +592,15 @@ async function startPolish(st, force) {
     if (el) el.innerHTML = `×${nextMult.toFixed(2)}` + (top && nextMult >= top ? '（已到這顆料的天花板）' : '');
   };
   paintNext(res.multiplier, res.ladder && res.ladder.top);
+  const LS = (res.ladder && res.ladder.start) || 0.93;
+  const LG = (res.ladder && res.ladder.gain) || 1.22;
   const paintLadder = (stage) => {
     ladder.innerHTML = '';
     for (let i = 0; i <= 10; i++) {
       const el = document.createElement('span');
       el.className = 'rung' + (i < stage ? ' past' : '') + (i === stage ? ' cur' : '');
-      el.textContent = '×' + (0.93 * Math.pow(1.2, i) > res.ladder.top ? res.ladder.top : (0.93 * Math.pow(1.2, i)).toFixed(2));
+      const val = LS * Math.pow(LG, i);
+      el.textContent = '×' + (val > res.ladder.top ? res.ladder.top : val.toFixed(2));
       ladder.appendChild(el);
     }
   };
