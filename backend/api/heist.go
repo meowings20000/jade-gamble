@@ -597,7 +597,12 @@ func (a *API) heistSay(w http.ResponseWriter, r *http.Request) error {
 	}
 	h, err := a.Store.MyHeist(uid)
 	if err != nil || h == nil {
-		return errors.New("你不在任何奪寶桌")
+		// 跟狀態查詢用同一套後備：剛入場（還沒開局）或剛結束的桌子也要能講話
+		if rec, rerr := a.Store.MyHeistRecent(uid, 30); rerr == nil && rec != nil {
+			h = rec
+		} else {
+			return errors.New("你不在任何奪寶桌")
+		}
 	}
 	if age := a.Store.HeistLastSayAge(h.ID, uid); age < 2 {
 		return errors.New("講太快了喵，喘口氣（2 秒一句）")
