@@ -97,6 +97,7 @@ func (a *API) polishStart(w http.ResponseWriter, r *http.Request) error {
 			"start": domain.PolishStartMult, "gain": domain.PolishStepGain,
 			"base_value": st.BaseValue(), "cash_value": int(float64(st.BaseValue()) * domain.PolishMultiplier(st, prog.Stage)),
 			"top": domain.PolishCeilingFor(st), "max_stage": domain.PolishMaxStage,
+			"last_stage": domain.PolishMaxStageFor(st),
 		},
 		"base_value": st.BaseValue(), "cash_value": int(float64(st.BaseValue()) * domain.PolishMultiplier(st, prog.Stage)), "stone_price": st.Price,
 		"alive": prog.Alive, "force": prog.Force, "force_name": domain.PolishForceName(prog.Force),
@@ -104,7 +105,7 @@ func (a *API) polishStart(w http.ResponseWriter, r *http.Request) error {
 			return domain.PolishBreakProbStage(st, prog.Force, prog.BreakMod, prog.Stage)
 		}(),
 		"feel":   domain.PolishFeel(st, prog.Force),
-		"at_top": prog.Stage >= domain.PolishMaxStage,
+		"at_top": prog.Stage >= domain.PolishMaxStageFor(st),
 	})
 	return nil
 }
@@ -153,7 +154,7 @@ func (a *API) polishAdvance(w http.ResponseWriter, r *http.Request) error {
 		"variety":     st.Variety.Name(),
 		"force":       ps.Force,
 		"force_name":  domain.PolishForceName(ps.Force),
-		"at_top":      ps.Stage >= domain.PolishMaxStage,
+		"at_top":      ps.AtTopFor(st),
 	}
 	if !alive {
 		// 磨崩：石頭報廢，但救回當前倍率的 35%（2026-09-17：避免一次失手就血本無歸）

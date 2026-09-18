@@ -140,11 +140,12 @@ func TestPolishForceEconomics(t *testing.T) {
 	for _, s := range spread {
 		informed += s.p * bestFor(&Stone{Quality: s.q, Price: 1000})
 	}
-	// 2026-09-18：爆裂率改成 10%→75% 遞增曲線後，最佳策略只有 1~2 層，
-	// 讀對的人小幅有利、讀錯的人是莊家利潤來源。這裡鎖住「普通玩家（讀對率 ≤60%）不該穩賺」。
+	// 2026-09-18：爆裂率改成「第一層 90% → 最低那層 25%」遞增曲線後，最佳策略只有 1~2 層。
+	// 判定標準要看「整體」：買石頭本身就已經有抽水（實測 EV 0.978），
+	// 所以磨石段的期望必須低於 1/0.978 ≈ 1.0225，玩家整體才不會穩賺。
 	for _, acc := range []float64{0.6} {
 		ev := acc*informed + (1-acc)*PolishStartMult
-		if ev > 1.005 {
+		if ev > 1.0225 {
 			t.Errorf("讀對率 %.0f%%：玩家有利可圖 EV=%.4f", acc*100, ev)
 		}
 	}

@@ -595,9 +595,10 @@ async function startPolish(st, force) {
   paintNext(res.multiplier, res.ladder && res.ladder.top);
   const LS = (res.ladder && res.ladder.start) || 0.93;
   const LG = (res.ladder && res.ladder.gain) || 1.22;
+  const lastStage = (res.ladder && res.ladder.last_stage != null) ? res.ladder.last_stage : 10;
   const paintLadder = (stage) => {
     ladder.innerHTML = '';
-    for (let i = 0; i <= 10; i++) {
+    for (let i = 0; i <= lastStage; i++) {
       const el = document.createElement('span');
       el.className = 'rung' + (i < stage ? ' past' : '') + (i === stage ? ' cur' : '');
       const val = LS * Math.pow(LG, i);

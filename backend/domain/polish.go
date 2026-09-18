@@ -44,12 +44,13 @@ const (
 
 // PolishMaxStageFor: 這顆料能爬到第幾層（種水天花板決定的最後一層）。
 func PolishMaxStageFor(st *Stone) int {
-	n := PolishMaxStage - 1
+	n := PolishMaxStage
 	if st == nil {
 		return n
 	}
 	if cap := PolishCeilingFor(st); cap > 0 {
-		k := int(math.Floor(math.Log(cap/PolishStartMult) / math.Log(PolishStepGain)))
+		// ceil：天花板撞到的那一格就是這顆料的最低那層（該層爆裂率剛好 75%）
+		k := int(math.Ceil(math.Log(cap/PolishStartMult) / math.Log(PolishStepGain)))
 		if k < n {
 			n = k
 		}
@@ -188,6 +189,9 @@ func (p *PolishState) Multiplier(st *Stone) float64 { return PolishMultiplier(st
 
 // AtTop: 已到天花板。
 func (p *PolishState) AtTop() bool { return p.Stage >= PolishMaxStage }
+
+// AtTopFor: 這顆料是否已到最低那層（種水天花板決定的最後一格）。
+func (p *PolishState) AtTopFor(st *Stone) bool { return p.Stage >= PolishMaxStageFor(st) }
 
 // PolishFirstLayerCap: 第一層只磨掉皮殼，風險上限 25%（2026-09-17 用戶反映
 // 「選錯力度第一層就爆」太靠運氣，先給一次便宜的試探機會）。
