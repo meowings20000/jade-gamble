@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strings"
 
 	"jade-gamble/backend/domain"
 	"jade-gamble/backend/store"
@@ -160,6 +161,12 @@ func (a *API) heistState(w http.ResponseWriter, r *http.Request) error {
 	out["me"] = mine
 	out["others"] = others
 	out["history"] = hist
+	// 同桌嘴砲（前端每 2.5 秒輪詢就會自己長出來）
+	if chat, err := a.Store.HeistChat(h.ID, 8); err == nil {
+		out["chat"] = chat
+	} else {
+		out["chat"] = []map[string]any{}
+	}
 	writeJSON(w, 200, out)
 	return nil
 }
@@ -566,5 +573,43 @@ func (a *API) heistLeave(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "chips": bal, "message": "已退出，入場費退回"})
+	return nil
+}
+
+// heistSay: POST /api/heist/say {text} —— 同桌嘴砲，每人 2 秒最多一句。
+func (a *API) heistSay(w http.ResponseWriter, r *http.Request) error {
+	uid, ok := a.mustUser(w, r)
+	if !ok {
+		return nil
+	}
+	var body struct {
+		Text string `json:"text"`
+	}
+	if err := readJSON(w, r, &body); err != nil {
+		return err
+	}
+	text := strings.TrimSpace(body.Text)
+	if text == "" {
+		return errors.New("要說點甚麼喵")
+	}
+	if len([]rune(text)) > 80 {
+		return errors.New("太長了喵（最多 80 字）")
+	}
+	h, err := a.Store.MyHeist(uid)
+	if err != nil || h == nil {
+		return errors.New("你不在任何奪寶桌")
+	}
+	if age := a.Store.HeistLastSayAge(h.ID, uid); age < 2 {
+		return errors.New("講太快了喵，喘口氣（2 秒一句）")
+	}
+	u, err := a.Store.GetUser(uid)
+	if err != nil {
+		return err
+	}
+	if err := a.Store.HeistSay(h.ID, uid, u.Username, text); err != nil {
+		return err
+	}
+	chat, _ := a.Store.HeistChat(h.ID, 8)
+	writeJSON(w, 200, map[string]any{"ok": true, "chat": chat})
 	return nil
 }

@@ -132,6 +132,7 @@ async function refreshMe() {
   $('#yboss-bet').style.display = logged ? '' : 'none';
   layoutMobileModes();
   if (logged) {
+    window.__me = me; // 給奪寶聊天判斷「哪句是我講的」與泡泡框
     setChips(me.chips);
     // 兌換所收藏的賭桌配色（只換 body 上的 theme_* class）
     document.body.className = document.body.className.replace(/\btheme_\w+\b/g, '').trim();

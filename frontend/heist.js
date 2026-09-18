@@ -32,6 +32,7 @@ async function loadHeist() {
     return;
   }
   renderHeist(d);
+  try { renderHeistChat(d); } catch (e) {}
 }
 
 function heistBar(p, t) {
@@ -244,3 +245,58 @@ setInterval(() => {
 }, 1000);
 
 heistEnsurePoll();
+
+// ---------- 同桌嘴砲（兌換所收藏「泡泡框」會套在自己講的話上）----------
+function heistChatBox() {
+  const view = document.getElementById('view-heist');
+  if (!view) return null;
+  let box = document.getElementById('heist-chat');
+  if (!box) {
+    box = document.createElement('div');
+    box.className = 'card';
+    box.id = 'heist-chat';
+    box.style.marginTop = '12px';
+    const me = (window.__me && window.__me.username) ? window.__me.username : '';
+    box.innerHTML = '<div style="font-size:13px;color:var(--gold);font-weight:700;margin-bottom:6px">💬 桌面嘴砲</div>' +
+      '<div id="heist-chat-log" style="max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin-bottom:8px"></div>' +
+      '<div class="row" style="gap:6px">' +
+      '<input id="heist-chat-in" maxlength="80" placeholder="說點什麼…（2 秒一句）" style="flex:1">' +
+      '<button class="btn" id="heist-chat-send">送出</button></div>';
+    view.appendChild(box);
+    const send = async () => {
+      const inp = document.getElementById('heist-chat-in');
+      const text = (inp.value || '').trim();
+      if (!text) return;
+      try {
+        const r = await api('POST', '/api/heist/say', { text });
+        inp.value = '';
+        if (r && r.chat) paintHeistChat(r.chat);
+      } catch (e) { toast(e.message || String(e)); }
+    };
+    box.querySelector('#heist-chat-send').addEventListener('click', send);
+    box.querySelector('#heist-chat-in').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') send(); });
+  }
+  return box;
+}
+
+// paintHeistChat: 畫出對話（自己的話套泡泡框收藏）
+function paintHeistChat(chat) {
+  const log = document.getElementById('heist-chat-log');
+  if (!log) return;
+  const meName = (window.__me && window.__me.username) ? window.__me.username : '';
+  const bubble = (window.__me && window.__me.bubble) ? window.__me.bubble : '';
+  log.innerHTML = (chat || []).map((m) => {
+    const mine = meName && m.name === meName;
+    const cls = mine && bubble ? (' ' + bubble) : '';
+    const right = mine ? 'text-align:right' : '';
+    return '<div class="chat-row' + cls + '" style="' + right + '">' +
+      '<span style="font-size:12px;color:var(--muted)">' + esc(m.name || '') + '</span> ' +
+      '<span class="chat-bubble" style="display:inline-block;padding:3px 9px;border-radius:10px;background:var(--panel2)">' + esc(m.text || '') + '</span></div>';
+  }).join('') || '<div style="font-size:12px;color:var(--muted)">還沒有人講話…</div>';
+  log.scrollTop = log.scrollHeight;
+}
+
+function renderHeistChat(d) {
+  heistChatBox();
+  paintHeistChat(d && d.chat);
+}

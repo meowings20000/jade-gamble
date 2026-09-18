@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"jade-gamble/backend/domain"
+	"time"
 )
 
 // ---------- 奪寶 heist ----------
@@ -354,4 +355,47 @@ func (s *Store) MyHeistRecent(userID, withinMin int) (*Heist, error) {
 		WHERE s.user_id=? AND s.left=0
 		  AND (h.status IN ('open','running') OR (julianday('now') - julianday(h.created_at)) * 1440.0 < ?)
 		ORDER BY h.id DESC LIMIT 1`, userID, withinMin))
+}
+
+// HeistChat: 一桌的嘴砲（舊→新，取最後 limit 句）。
+func (s *Store) HeistChat(heistID, limit int) ([]map[string]any, error) {
+	rows, err := s.db.Query(`SELECT name, text, at FROM heist_chat WHERE heist_id=? ORDER BY id DESC LIMIT ?`, heistID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	rev := []map[string]any{}
+	for rows.Next() {
+		var name, text, at string
+		if err := rows.Scan(&name, &text, &at); err != nil {
+			return nil, err
+		}
+		rev = append(rev, map[string]any{"name": name, "text": text, "at": at})
+	}
+	out := make([]map[string]any, 0, len(rev))
+	for i := len(rev) - 1; i >= 0; i-- {
+		out = append(out, rev[i])
+	}
+	return out, rows.Err()
+}
+
+// HeistSay: 寫一句（含名字，方便前端直接顯示）。
+func (s *Store) HeistSay(heistID, userID int, name, text string) error {
+	_, err := s.db.Exec(`INSERT INTO heist_chat (heist_id, user_id, name, text, at) VALUES (?,?,?,?,?)`,
+		heistID, userID, name, text, time.Now().UTC().Format(time.RFC3339))
+	return err
+}
+
+// HeistLastSayAge: 這個人在這桌上一句講了多久（秒）。沒講過回很大。
+func (s *Store) HeistLastSayAge(heistID, userID int) float64 {
+	var at string
+	if err := s.db.QueryRow(`SELECT at FROM heist_chat WHERE heist_id=? AND user_id=? ORDER BY id DESC LIMIT 1`,
+		heistID, userID).Scan(&at); err != nil {
+		return 9999
+	}
+	tm, err := time.Parse(time.RFC3339, at)
+	if err != nil {
+		return 9999
+	}
+	return time.Since(tm).Seconds()
 }

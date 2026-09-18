@@ -82,6 +82,9 @@ var ExchangeCatalog = []ExchangeItem{
 	{"theme_ink", "賭桌配色・墨玉", 7000, "cosmetic", "墨翠沉綠，最耐看。"},
 	{"theme_gold", "賭桌配色・金碧", 10000, "cosmetic", "金碧輝煌，土豪專用。"},
 	{"fx_confetti", "開箱彩帶特效", 4000, "cosmetic", "切石／落袋賺大錢時噴彩帶（靠自己打出好料才會噴）。"},
+	{"bubble_pink", "泡泡框・粉喵", 1500, "cosmetic", "奪寶桌上你講的話用粉色泡泡（附貓耳角標）。"},
+	{"bubble_violet", "泡泡框・紫霧", 4000, "cosmetic", "紫霧邊框泡泡。"},
+	{"bubble_gold", "泡泡框・金口", 8000, "cosmetic", "金邊燙金泡泡，講話都像有錢人。"},
 }
 
 func ExchangeItemByKey(key string) (ExchangeItem, bool) {

@@ -35,6 +35,16 @@ func Open(path string) (*Store, error) {
 func (s *Store) Close() error { return s.db.Close() }
 
 func (s *Store) migrate() error {
+	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS heist_chat (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		heist_id INTEGER NOT NULL,
+		user_id INTEGER NOT NULL,
+		name TEXT NOT NULL DEFAULT '',
+		text TEXT NOT NULL,
+		at TEXT NOT NULL
+	)`); err != nil {
+		return err
+	}
 	// 貨架的「價格階梯」用 12 小時為一輪（內容補貨仍是每天一次）
 	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS relief_log (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,

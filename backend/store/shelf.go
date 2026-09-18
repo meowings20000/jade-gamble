@@ -485,3 +485,13 @@ func (s *Store) EquippedTheme(userID int) string {
 func (s *Store) HasRevealFX(userID int) bool {
 	return s.OwnsItem(userID, "fx_confetti")
 }
+
+// EquippedBubble: 擁有的聊天泡泡框（貴的優先），沒有回空字串。
+func (s *Store) EquippedBubble(userID int) string {
+	for _, key := range []string{"bubble_gold", "bubble_violet", "bubble_pink"} {
+		if s.OwnsItem(userID, key) {
+			return key
+		}
+	}
+	return ""
+}

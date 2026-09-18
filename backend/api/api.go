@@ -94,6 +94,7 @@ func (a *API) Routes() *http.ServeMux {
 	mux.HandleFunc("GET /api/gems", a.handler(a.gemCollection))
 	mux.HandleFunc("POST /api/heist/fill", a.handler(a.heistFill))
 	mux.HandleFunc("POST /api/heist/act", a.handler(a.heistAct))
+	mux.HandleFunc("POST /api/heist/say", a.handler(a.heistSay))
 	mux.HandleFunc("POST /api/heist/leave", a.handler(a.heistLeave))
 	mux.HandleFunc("POST /api/titles/equip", a.handler(a.equipTitle))
 	mux.HandleFunc("GET /api/admin/panel", a.handler(a.adminPanel))
@@ -177,9 +178,10 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) error {
 		"chips": u.Chips, "collection_score": u.CollectionScore, "title": u.Title,
 		"items": items, "discovered": varieties,
 		"is_admin": a.isAdmin(uid), "discord_id": u.DiscordID,
-		"frame": a.Store.EquippedFrame(uid),
-		"theme": a.Store.EquippedTheme(uid),
-		"fx":    a.Store.HasRevealFX(uid),
+		"frame":  a.Store.EquippedFrame(uid),
+		"theme":  a.Store.EquippedTheme(uid),
+		"fx":     a.Store.HasRevealFX(uid),
+		"bubble": a.Store.EquippedBubble(uid),
 		"title_rare": func() int {
 			for _, t := range domain.Titles {
 				if t.Key == u.Title || t.Name == u.Title {
