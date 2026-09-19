@@ -363,7 +363,7 @@ function showResultModal(title, res, st) {
     ${eggHTML}
     ${showCutView ? '<canvas id="cut-cv"></canvas>' : ''}
     <div class="big-result ${res.polish ? '' : (win ? 'win' : 'lose')}">${res.polish ? '' : (win ? '+' : '')}${fmt(res.payout)} 喵喵幣</div>
-    ${res.polish ? `<div class="kv"><span>成本（買入價）</span><b>${fmt(cost)}</b></div>
+    ${(res.polish || (st && st.origin === 'classic')) ? `<div class="kv"><span>${st && st.origin === 'classic' && !res.polish ? '賭資（成本）' : '成本（買入價）'}</span><b>${fmt(cost)}</b></div>
     <div class="kv"><span>${net >= 0 ? '淨賺' : '淨賠'}</span><b style="color:${net >= 0 ? 'var(--green)' : 'var(--red)'}">${net >= 0 ? '+' : ''}${fmt(net)}</b></div>` : ''}
     <div class="kv"><span>${gemKey ? '寶石' : '品質'}</span><b>${gemKey ? esc(res.gem_name || gemKey) : res.quality}</b></div>
     ${gemKey ? '<div class="kv"><span>材質</span><b>不是玉石</b></div>' : `<div class="kv"><span>異色</span><b>${res.variety}</b></div>`}
