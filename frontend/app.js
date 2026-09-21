@@ -809,6 +809,11 @@ $('#classic-bet').addEventListener('click', () => {
         style="flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:10px;border-radius:8px">
       <button class="btn" id="stake-go">壓注開石</button>
     </div>
+    <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap">
+      ${[1000, 5000, 20000, 100000].map((v) => `<button class="btn ghost" data-quick="v" data-amt="${v}">${v.toLocaleString()}</button>`).join('')}
+      <button class="btn ghost" data-quick="v" data-amt="all">全部</button>
+    </div>
+
     <p style="font-size:12px;color:var(--muted);margin-top:8px" id="stake-err"></p>`;
   bg.appendChild(m);
   document.body.appendChild(bg);
@@ -825,6 +830,21 @@ $('#classic-bet').addEventListener('click', () => {
       loadWarehouse();
     } catch (e) { err.textContent = e.message; }
   });
+});
+
+
+// 快速金額按鈕（傳統模式／Y佬模式共用）：填進同一排的 number input
+document.addEventListener('click', (ev) => {
+  const btn = ev.target.closest && ev.target.closest('button[data-quick="v"]');
+  if (!btn) return;
+  const row = btn.closest('.row');
+  const modal = btn.closest('.modal');
+  const input = (row && row.parentElement.querySelector('input[type=number]')) || (modal && modal.querySelector('input[type=number]'));
+  if (!input) return;
+  const chips = (window.__me && window.__me.chips) || 0;
+  const amt = btn.dataset.amt === 'all' ? Math.max(100, chips) : Number(btn.dataset.amt);
+  input.value = String(Math.min(1000000, amt));
+  input.dispatchEvent(new Event('input', { bubbles: true }));
 });
 
 initLangToggle();
@@ -844,6 +864,10 @@ $('#yboss-bet').addEventListener('click', () => {
     <div class="row" style="margin:10px 0">
       <input id="yb-stake" type="number" min="100" max="1000000" step="100" value="1000"
         style="flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:10px;border-radius:8px">
+    </div>
+    <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap">
+      ${[1000, 5000, 20000, 100000].map((v) => `<button class="btn ghost" data-quick="v" data-amt="${v}">${v.toLocaleString()}</button>`).join('')}
+      <button class="btn ghost" data-quick="v" data-amt="all">全部</button>
     </div>
     <div class="row">
       <button class="btn" id="yb-cut">切一刀</button>
