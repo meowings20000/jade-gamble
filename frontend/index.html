@@ -75,6 +75,8 @@ th{color:var(--muted);font-weight:400}
 .scratch-board canvas{position:absolute;inset:0;width:100%;height:100%}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--gold);color:var(--text);padding:10px 18px;border-radius:10px;z-index:200;font-size:14px;animation:fadeout 2.6s forwards}
 @keyframes fadeout{0%,70%{opacity:1}100%{opacity:0}}
+@keyframes clawdPop{0%{transform:scale(.85) translateY(4px);opacity:0}100%{transform:scale(1) translateY(0);opacity:1}}
+@keyframes clawdShake{0%{transform:rotate(0)}25%{transform:rotate(-6deg)}55%{transform:rotate(5deg)}80%{transform:rotate(-2deg)}100%{transform:rotate(0)}}
 .egg-banner{background:linear-gradient(90deg,#2a2415,#3a3018,#2a2415);border:1px solid var(--glow);color:var(--glow);padding:10px 14px;border-radius:10px;margin-bottom:12px;font-size:13px}
 #login-view{max-width:400px;margin:60px auto;text-align:center}
 #login-view .logo{font-size:40px;margin-bottom:8px}
@@ -150,6 +152,7 @@ body.mobile nav #classic-bet,body.mobile nav #yboss-bet{display:inline-flex !imp
     <button data-view="transfer">轉賬</button>
     <button data-view="history">紀錄</button>
     <button data-view="bank">喵喵錢莊</button>
+    <button data-view="aipool">AI 養殖場</button>
     <button data-view="heist">奪寶</button>
     <button data-view="admin" id="nav-admin" style="display:none">控制臺</button>
     <button data-view="exchange">兌換所</button>
@@ -207,6 +210,42 @@ body.mobile nav #classic-bet,body.mobile nav #yboss-bet{display:inline-flex !imp
         <button class="btn" id="relief-chips">領 1,000 喵喵幣</button>
         <button class="btn ghost" id="relief-ticket">刮到爽門票 + 300 喵喵幣</button>
       </div>
+    </div>
+  </div>
+  <div class="view" id="view-aipool">
+    <h2>AI 養殖場</h2>
+    <p style="font-size:13px;color:var(--muted);margin:-4px 0 10px">
+      大家捐喵喵幣到公共池，湊到門檻就開放 <b>Claude</b> 給全服。<br>
+      額度剩越少，門檻越高（<b>50 萬起跳</b>）；每 7 天重置一輪。<br>
+      單人捐贈<b>最多計入門檻的 20%</b> —— 至少 5 個人出力才開得成。<br>
+      剩餘 <b>15%</b> 以下直接鎖死。</p>
+    <div class="card">
+      <h3 style="color:var(--gold);margin-bottom:8px">公共池</h3>
+      <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+        <div id="aipool-mascot" style="flex:0 0 120px;cursor:pointer" title="戳朕" onclick="clawdPoke()"></div>
+        <div id="aipool-state" style="flex:1;min-width:220px;font-size:14px">載入中…</div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="color:var(--gold);margin-bottom:8px">我要捐</h3>
+      <div class="row" style="gap:8px;flex-wrap:wrap">
+        <input id="aipool-amount" type="number" min="1" placeholder="金額（喵喵幣）">
+        <button class="btn" id="aipool-btn">捐入公共池</button>
+      </div>
+      <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
+        <button class="btn ghost" onclick="(function(){var i=document.getElementById('aipool-amount');i.value=10000;})()">1 萬</button>
+        <button class="btn ghost" onclick="(function(){var i=document.getElementById('aipool-amount');i.value=50000;})()">5 萬</button>
+        <button class="btn ghost" onclick="(function(){var i=document.getElementById('aipool-amount');i.value=100000;})()">10 萬</button>
+        <button class="btn ghost" onclick="(function(){var i=document.getElementById('aipool-amount');i.value=Math.min(parseInt(localStorage.getItem('chips')||'0'),99999999);})()">All-in</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="color:var(--muted);margin-bottom:8px">門檻階梯（7 天額度剩餘 → 解鎖門檻）</h3>
+      <div id="aipool-ladder" style="font-size:13px"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="color:var(--muted);margin-bottom:8px">我捐過的</h3>
+      <div id="aipool-my" style="font-size:13px">—</div>
     </div>
   </div>
   <div class="view" id="view-transfer">
@@ -354,6 +393,7 @@ body.mobile nav #classic-bet,body.mobile nav #yboss-bet{display:inline-flex !imp
   </div>
 </main>
 <script src="stone-render.js?v=20260916e"></script>
+<script src="clawd.js?v=20261005a"></script>
 <script src="heist.js?v=20260917a"></script>
   <script src="rewards.js?v=20260917a"></script>
   <script src="app.js?v=20260920a"></script>

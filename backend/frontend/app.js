@@ -54,6 +54,7 @@ document.querySelectorAll('nav button').forEach(b =>
        exchange: () => { loadExchange(); if (typeof loadRewards === 'function') loadRewards(); },
        collection: () => { loadCollection(); loadGemBook(); }, ranks: loadRanks,
        transfer: loadTransfers, admin: loadAdmin, history: loadHistory, bank: loadBank,
+       aipool: loadAIPool,
        heist: (typeof loadHeist === 'function' ? (() => { loadHeist(); if (typeof heistEnsurePoll === 'function') heistEnsurePoll(); if (!window.__heistTick) window.__heistTick = setInterval(() => { const v = document.getElementById('view-heist'); if (v && v.classList.contains('active') && typeof loadHeist === 'function') { loadHeist(); if (typeof heistSyncChips === 'function') heistSyncChips(); } }, 2500); }) : loadShop) })[b.dataset.view]();
   }));
 
@@ -63,12 +64,12 @@ const I18N = {
   'zh-TW': {
     'shop': '商店', 'warehouse': '倉庫', 'market': '競標場', 'exchange': '兌換所',
     'collection': '圖鑑', 'ranks': '排行榜', 'transfer': '轉賬', 'admin': '控制臺', 'history': '紀錄', 'bank': '喵喵錢莊', 'logout': '登出', 'classic': '傳統模式',
-    'yboss': 'Y佬模式', 'heist': '奪寶', 'langBtn': '简',
+    'yboss': 'Y佬模式', 'heist': '奪寶', 'langBtn': '简', 'aipool': 'AI 養殖場',
   },
   'zh-CN': {
     'shop': '商店', 'warehouse': '仓库', 'market': '竞标场', 'exchange': '兑换所',
     'collection': '图鉴', 'ranks': '排行榜', 'transfer': '转账', 'admin': '控制台', 'history': '记录', 'bank': '喵喵钱庄', 'logout': '登出', 'classic': '传统模式',
-    'yboss': 'Y佬模式', 'heist': '夺宝', 'langBtn': '繁',
+    'yboss': 'Y佬模式', 'heist': '夺宝', 'langBtn': '繁', 'aipool': 'AI 养殖场',
   },
 };
 let LANG = localStorage.getItem('lang') || 'zh-TW';
@@ -1224,6 +1225,72 @@ async function loadTitles() {
   };
 }
 
+
+// ---------- AI 養殖場（Claude 共產池）----------
+function aipoolBar(pct) {
+  const n = Math.max(0, Math.min(20, Math.round(pct / 5)));
+  return '[' + '#'.repeat(n) + '.'.repeat(20 - n) + ']';
+}
+function aipoolThresholdText(th) {
+  if (th > 4503599627370496) return '鎖死（剩餘 <10%）';
+  return fmt(th) + ' 喵喵幣';
+}
+async function loadAIPool() {
+  let d;
+  try { d = await api('GET', '/api/ai/pool'); } catch (e) { $('#aipool-state').textContent = '載入失敗：' + (e.message || e); return; }
+  const p = d.pool || {};
+  clawdMount(p);
+  const st = document.getElementById('aipool-state');
+  if (!st) return;
+  const pct = Math.round(p.seven_day_util || 0);
+  const pct5 = Math.round(p.five_hour_util || 0);
+  let statusTxt, color;
+  if (p.floor_lock) { statusTxt = '🔒 底線鎖死（7 天額度剩餘 <15%）'; color = 'var(--red)'; }
+  else if (p.five_hour_util >= 90) { statusTxt = '😴 5 小時額度用光 — 等窗口重置（池子保留）'; color = 'var(--gold)'; }
+  else if (p.unlocked) { statusTxt = '✅ 已解鎖 — Claude 開放中'; color = 'var(--green)'; }
+  else if (p.pool_chips >= p.threshold) { statusTxt = '⏳ 已達標，等待系統開門（最多 5 分鐘）'; color = 'var(--gold)'; }
+  else { statusTxt = '🔒 未解鎖 — 池子未達門檻'; color = 'var(--muted)'; }
+  st.innerHTML = `
+    <div style="font-size:15px;margin-bottom:6px">池子：<b>${fmt(p.pool_chips || 0)}</b> 喵喵幣</div>
+    <div style="font-size:14px;margin-bottom:6px">目前門檻：<b>${aipoolThresholdText(p.threshold || 0)}</b></div>
+    <div style="font-size:14px;margin-bottom:10px;color:${color}"><b>${statusTxt}</b></div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.8">
+      7 天額度：已用 <b>${pct}%</b> ${aipoolBar(pct)}${p.seven_day_reset ? '<br>重置時間：' + new Date(p.seven_day_reset).toLocaleString() : ''}<br>
+      5 小時額度：已用 <b>${pct5}%</b> ${aipoolBar(pct5)}${p.five_hour_reset ? '<br>重置時間：' + new Date(p.five_hour_reset).toLocaleString() : ''}
+    </div>`;
+  // 階梯表
+  const ladder = document.getElementById('aipool-ladder');
+  if (ladder) {
+    const rows = [
+      ['剩餘 ≥80%', '50 萬'], ['剩餘 60~80%', '75 萬'], ['剩餘 40~60%', '100 萬'],
+      ['剩餘 25~40%', '150 萬'], ['剩餘 15~25%', '200 萬'], ['剩餘 <15%', '🔒 鎖死'],
+    ];
+    ladder.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+      rows.map(r => `<tr><td style="padding:4px 8px;border-bottom:1px solid var(--border)">${r[0]}</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);text-align:right"><b>${r[1]}</b> 喵喵幣</td></tr>`).join('') +
+      '</table>';
+  }
+  const my = document.getElementById('aipool-my');
+  if (my) my.innerHTML = p.my_contrib ? `我總共捐了 <b>${fmt(p.my_contrib)}</b> 喵喵幣` : '還沒捐過 — 捐了會記在這裡';
+  const btn = document.getElementById('aipool-btn');
+  if (btn && !btn.dataset.hooked) {
+    btn.dataset.hooked = '1';
+    btn.addEventListener('click', async () => {
+      const amt = parseInt(document.getElementById('aipool-amount').value, 10);
+      if (!amt || amt <= 0) { toast('先填金額'); return; }
+      try {
+        const r = await api('POST', '/api/ai/pool/contribute', { amount: amt });
+        toast('已捐入 ' + fmt(amt) + ' 喵喵幣 🐱', true);
+        if (typeof r.chips === 'number') setChips(r.chips);
+        // clawd 丟幣動畫（1.2 秒後回正常）
+        const m = document.getElementById('aipool-mascot');
+        if (m && typeof clawdCoin === 'function') {
+          m.innerHTML = clawdCoin();
+          setTimeout(() => loadAIPool(), 1200);
+        } else { loadAIPool(); }
+      } catch (e) { toast(e.message || '捐贈失敗'); }
+    });
+  }
+}
 
 // ---------- 喵喵錢莊 ----------
 function bankRow(k, v) {

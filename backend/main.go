@@ -53,6 +53,8 @@ func main() {
 		AIBaseURL: getenv("AI_BASE_URL", "https://api.deepseek.com/v1"),
 		AIAPIKey:  os.Getenv("AI_API_KEY"),
 		AIModel:   getenv("AI_MODEL", "deepseek-chat"),
+		// AI 共產池守門員 token（.env，gitignored，永不進 repo）
+		AISyncToken: os.Getenv("AI_SYNC_TOKEN"),
 	}
 
 	mux := a.Routes()

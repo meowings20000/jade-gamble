@@ -29,6 +29,8 @@ type API struct {
 	AIBaseURL string
 	AIAPIKey  string
 	AIModel   string
+	// AI 共產池的 DMIT 守門員同步 token（.env AI_SYNC_TOKEN，不進 repo）
+	AISyncToken string
 }
 
 // routes registers everything on a mux.
@@ -113,6 +115,11 @@ func (a *API) Routes() *http.ServeMux {
 	mux.HandleFunc("GET /api/leaderboard", a.handler(a.leaderboard))
 	mux.HandleFunc("GET /api/collection", a.handler(a.collection))
 	mux.HandleFunc("GET /api/hall", a.handler(a.hallOfFame))
+
+	// AI 共產池（Claude 額度公設）
+	mux.HandleFunc("GET /api/ai/pool", a.handler(a.aiPoolView))
+	mux.HandleFunc("POST /api/ai/pool/contribute", a.handler(a.aiPoolContribute))
+	mux.HandleFunc("POST /api/ai/pool/sync", a.handler(a.aiPoolSync))
 	return mux
 }
 
