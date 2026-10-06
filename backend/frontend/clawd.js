@@ -61,6 +61,71 @@ const EYES_DIZZY = `
     <path d="M44 49 l6 6 M50 49 l-6 6 M62 49 l6 6 M68 49 l-6 6" stroke-width="1.4"/>
   </g>`;
 
+// 1b) 夢想（0-25%）：坐著抬頭看星星，偶爾眨眼
+function clawdDream() {
+  return clawdBase(EYES_OPEN, `
+    <g opacity=".8">
+      <text x="84" y="26" font-size="10" fill="#E8B98F">✧<animate attributeName="opacity" values=".2;.8;.2" dur="2.6s" repeatCount="indefinite"/></text>
+      <text x="94" y="38" font-size="7" fill="#B08968">✧<animate attributeName="opacity" values=".8;.2;.8" dur="3.2s" repeatCount="indefinite"/></text>
+      <text x="76" y="18" font-size="8" fill="#D97757" opacity=".5"><animate attributeName="opacity" values=".5;.9;.5" dur="4s" repeatCount="indefinite"/>…</text>
+    </g>`,
+    `<animateTransform attributeName="transform" type="translate" values="0 2; 0 0; 0 2" dur="4.2s" repeatCount="indefinite"/>`);
+}
+
+// 1c) 希望（25-50%）：站起來仰望 + 小愛心
+function clawdHopeful() {
+  return clawdBase(EYES_OPEN, `
+    <g>
+      <text x="88" y="34" font-size="11" opacity=".7">♥<animate attributeName="opacity" values=".3;.9;.3" dur="1.9s" repeatCount="indefinite"/></text>
+      <text x="10" y="44" font-size="9" fill="#B08968" opacity=".5">✧<animate attributeName="opacity" values=".5;.9;.5" dur="2.4s" repeatCount="indefinite"/></text>
+    </g>`,
+    `<animateTransform attributeName="transform" type="translate" values="0 0; 0 -3; 0 0" dur="2.2s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1"/>`);
+}
+
+// 1d) 興奮（50-75%）：耳朵抖動 + 轉圈小跑 + ⚡
+function clawdExcited() {
+  return clawdBase(EYES_OPEN, `
+    <g>
+      <text x="86" y="24" font-size="12" fill="#F5C542">⚡<animate attributeName="opacity" values="1;.3;1" dur="0.7s" repeatCount="indefinite"/></text>
+      <text x="12" y="34" font-size="10" fill="#E8B98F" opacity=".6">✧</text>
+      <animateTransform attributeName="transform" type="rotate" values="0 56 100; 3 56 100; -3 56 100; 0 56 100" dur="0.8s" repeatCount="indefinite"/>
+    </g>`,
+    `<animateTransform attributeName="transform" type="translate" values="0 0; 0 -5; 0 0" dur="0.55s" repeatCount="indefinite"/>`);
+}
+
+// 1e) 開市派對（開市中 1 小時）：墨鏡 + 幣雨 + 蹦迪
+function clawdParty() {
+  const coins = [];
+  for (let i = 0; i < 5; i++) {
+    const x = 10 + Math.random() * 100;
+    coins.push(`<circle cx="${x.toFixed(0)}" cy="-10" r="4" fill="#F5C542" stroke="#B7860B" stroke-width="1.5">
+      <animate attributeName="cy" values="-10;125" dur="${(1.6 + Math.random()).toFixed(1)}s" begin="${(Math.random() * 1.2).toFixed(1)}s" repeatCount="indefinite"/>
+    </circle>`);
+  }
+  return `<svg viewBox="0 0 120 120" width="120" height="120" xmlns="http://www.w3.org/2000/svg" style="overflow:visible">
+  <animateTransform attributeName="transform" type="translate" values="0 0; 0 -12; 0 0" dur="0.5s" repeatCount="indefinite" calcMode="spline" keySplines="0.3 0 0.7 1;0.3 0 0.7 1"/>
+  <g>
+    <path d="M84 94 q20 0 18 -22 q-2 -16 -16 -12" fill="none" stroke="#E8B98F" stroke-width="9" stroke-linecap="round">
+      <animate attributeName="d" dur="0.7s" repeatCount="indefinite"
+        values="M84 94 q20 0 18 -22 q-2 -16 -16 -12; M84 94 q24 -6 10 -26 q-8 -10 -20 -2; M84 94 q20 0 18 -22 q-2 -16 -16 -12"/>
+    </path>
+    <ellipse cx="56" cy="84" rx="28" ry="22" fill="#D97757"/>
+    <circle cx="56" cy="84" r="12" fill="#F5E6D3"/>
+    <path d="M34 56 l-5 -19 l17 9 z" fill="#D97757"/>
+    <path d="M78 56 l5 -19 l-17 9 z" fill="#D97757"/>
+    <circle cx="56" cy="54" r="23" fill="#D97757"/>
+    <!-- 墨鏡 -->
+    <g><rect x="38" y="46" width="16" height="10" rx="3" fill="#1a1a1a"/><rect x="60" y="46" width="16" height="10" rx="3" fill="#1a1a1a"/><path d="M54 50 h6 M38 50 l-6 -3 M76 50 l6 -3" stroke="#1a1a1a" stroke-width="2"/>
+      <path d="M40 48 h12 M62 48 h12" stroke="#66ccff" stroke-width="1.4" opacity=".7"><animate attributeName="opacity" values=".7;.2;.7" dur="0.6s" repeatCount="indefinite"/></path></g>
+    <path d="M50 64 q6 6 12 0" fill="none" stroke="#7C2D12" stroke-width="2.2" stroke-linecap="round"/>
+    <ellipse cx="38" cy="98" rx="7" ry="5" fill="#E8B98F"/>
+    <ellipse cx="74" cy="98" rx="7" ry="5" fill="#E8B98F"/>
+    ${coins.join('')}
+    <text x="8" y="20" font-size="12" opacity=".8">🎉</text>
+    <text x="98" y="18" font-size="12" opacity=".8">🎉<animate attributeName="opacity" values=".8;.3;.8" dur="0.9s" repeatCount="indefinite"/></text>
+  </g></svg>`;
+}
+
 // 1) 睡覺（未解鎖）：呼吸起伏 + zzz
 function clawdSleep() {
   return clawdBase(EYES_SLEEP, `
@@ -114,18 +179,28 @@ function clawdCoin() {
 }
 
 // 依池子狀態挑吉祥物（5h 撞牆 → 睡覺等重置）
+// ★ 進度分段（user 2026-10-06）：0-25-50-75% 各有動態+語錄
 function clawdFor(p) {
-  if (!p) return clawdSleep();
+  if (!p) return clawdDream();
+  if (p.open_until && p.unlocked) return clawdParty();
   if (p.floor_lock) return clawdDizzy();
   if (p.unlocked)   return clawdHappy();
+  // 未開市：按進度
+  const prog = p.threshold > 0 && p.threshold < 4503599627370496 ? (p.pool_chips / p.threshold) : 0;
+  if (prog >= 0.75) return clawdExcited();   // 75%+ 就快到了
+  if (prog >= 0.50) return clawdHopeful();   // 過半
+  if (prog >= 0.25) return clawdDream();     // 有進度
   return clawdSleep();
 }
 function clawdMood(p) {
   if (!p) return 'sleeping';
+  if (p.unlocked && p.open_until) return 'party';
   if (p.floor_lock) return 'dizzy';
   if (p.unlocked) return 'happy';
-  if ((p.five_hour_util || 0) >= 90) return 'sleeping';
-  if ((p.pool_chips || 0) >= (p.threshold || 0)) return 'waiting';
+  const prog = p.threshold > 0 && p.threshold < 4503599627370496 ? (p.pool_chips / p.threshold) : 0;
+  if (prog >= 0.75) return 'excited';
+  if (prog >= 0.50) return 'hopeful';
+  if (prog >= 0.25) return 'dream';
   return 'sleeping';
 }
 
@@ -137,6 +212,34 @@ const CLAWD_LINES = {
     '喵？捐滿了再叫我。',
     '睡給你看，反正 Claude 鎖著。',
     '（尾巴抖了一下）別戳…沒額度…',
+  ],
+  dream: [
+    '（做白日夢）要是有 Claude 可以用…',
+    '池子有一點點了喵…繼續。',
+    '☆ 想像著大家用 Claude 的樣子…',
+    '（抬頭看天）今天會有人捐嗎？',
+    '25% 了喵……還早，但在動。',
+  ],
+  hopeful: [
+    '過半了！有希望的感覺喵！',
+    '（坐直）再一點點…再一點點…',
+    '♥ 大家都在存錢的感覺真好。',
+    '你也在等開市嗎？我也是。',
+    '50% —— 續攤的人在哪～',
+  ],
+  excited: [
+    '⚡快了快了！衝啊喵！',
+    '（原地打轉）75%了吶！！',
+    '差一點差一點！叫大家來捐！',
+    '（小跑心跳 180）開市就在眼前！',
+    '再一腳就到門檻了喵！！！',
+  ],
+  party: [
+    '🎉 開市啦！去用 Claude 喵！！',
+    '（蹦迪中）一小時嗨起來——',
+    '墨鏡戴上，額度燒起！',
+    '喵喵幣雨～淋到就是用到的～',
+    '別戳了快去用 Claude 啦！',
   ],
   happy: [
     '開啦開啦！去用 Claude 喵！',

@@ -240,6 +240,19 @@ body.mobile nav #classic-bet,body.mobile nav #yboss-bet{display:inline-flex !imp
       </div>
     </div>
     <div class="card" style="margin-top:16px">
+      <h3 style="color:var(--gold);margin-bottom:8px">開市</h3>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:10px">
+        池子湊到門檻後，這裡會出現<b>開市按鈕</b> —— 按下就開放 <b>Claude 一小時</b>給全服 vip，池子的喵喵幣同時燒掉（買一小時）。<br>
+        開市中誰都不能關；一小時後自動收市，重新累積。</p>
+      <button class="btn" id="aipool-open-btn" style="display:none;font-size:16px;padding:12px 28px;background:var(--gold);color:#1a1500">🚪 開市！（開放 Claude 一小時）</button>
+      <div id="aipool-open-state" style="font-size:13px;margin-top:8px;color:var(--muted)"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="color:var(--gold);margin-bottom:8px">捐獻名單</h3>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">每人計入上限是全池 20%（浮動）—— 別人捐越多，你能捐的也越多。名單顯示「計入額」：</p>
+      <div id="aipool-board" style="font-size:13px">載入中…</div>
+    </div>
+    <div class="card" style="margin-top:16px">
       <h3 style="color:var(--muted);margin-bottom:8px">門檻階梯（7 天額度剩餘 → 解鎖門檻）</h3>
       <div id="aipool-ladder" style="font-size:13px"></div>
     </div>

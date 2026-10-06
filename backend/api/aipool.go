@@ -23,7 +23,11 @@ func (a *API) aiPoolView(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	writeJSON(w, 200, map[string]any{"ok": true, "pool": v})
+	board, err := a.Store.AIContribList(20)
+	if err != nil {
+		board = []map[string]any{}
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "pool": v, "board": board})
 	return nil
 }
 
@@ -63,6 +67,23 @@ func (a *API) aiPoolContribute(w http.ResponseWriter, r *http.Request) error {
 	view = v
 	view.ChipsAfter = chipsAfter
 	writeJSON(w, 200, map[string]any{"ok": true, "pool": view})
+	return nil
+}
+
+// aiPoolOpen: POST /api/ai/pool/open —— ★ 開市按鈕（池子達標才有效）
+// 開市 1 小時：pool 清零、open_until=now+1h；DMIT 守門員依 unlock 指令開渠道
+func (a *API) aiPoolOpen(w http.ResponseWriter, r *http.Request) error {
+	uid, err := a.userID(r)
+	if err != nil {
+		return err
+	}
+	var body struct{}
+	_ = readJSON(w, r, &body) // body 可空
+	v, err := a.Store.AIMarketOpen(uid, time.Now())
+	if err != nil {
+		return err
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "pool": v})
 	return nil
 }
 

@@ -119,6 +119,7 @@ func (a *API) Routes() *http.ServeMux {
 	// AI 共產池（Claude 額度公設）
 	mux.HandleFunc("GET /api/ai/pool", a.handler(a.aiPoolView))
 	mux.HandleFunc("POST /api/ai/pool/contribute", a.handler(a.aiPoolContribute))
+	mux.HandleFunc("POST /api/ai/pool/open", a.handler(a.aiPoolOpen))
 	mux.HandleFunc("POST /api/ai/pool/sync", a.handler(a.aiPoolSync))
 	return mux
 }

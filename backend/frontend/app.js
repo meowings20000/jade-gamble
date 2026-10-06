@@ -1246,13 +1246,13 @@ async function loadAIPool() {
   const pct5 = Math.round(p.five_hour_util || 0);
   let statusTxt, color;
   if (p.floor_lock) { statusTxt = '🔒 底線鎖死（7 天額度剩餘 <15%）'; color = 'var(--red)'; }
-  else if (p.five_hour_util >= 90) { statusTxt = '😴 5 小時額度用光 — 等窗口重置（池子保留）'; color = 'var(--gold)'; }
+  else if (p.unlocked && p.open_until) { statusTxt = '🟢 開市中 — 到 ' + new Date(p.open_until).toLocaleTimeString() + '（一小時）'; color = 'var(--green)'; }
   else if (p.unlocked) { statusTxt = '✅ 已解鎖 — Claude 開放中'; color = 'var(--green)'; }
-  else if (p.pool_chips >= p.threshold) { statusTxt = '⏳ 已達標，等待系統開門（最多 5 分鐘）'; color = 'var(--gold)'; }
+  else if (p.pool_chips >= p.threshold) { statusTxt = '🚪 開市按鈕已就緒 — 由你按下！'; color = 'var(--gold)'; }
   else { statusTxt = '🔒 未解鎖 — 池子未達門檻'; color = 'var(--muted)'; }
   st.innerHTML = `
-    <div style="font-size:15px;margin-bottom:6px">池子：<b>${fmt(p.pool_chips || 0)}</b> 喵喵幣</div>
-    <div style="font-size:14px;margin-bottom:6px">目前門檻：<b>${aipoolThresholdText(p.threshold || 0)}</b></div>
+    <div style="font-size:15px;margin-bottom:6px">累積池：<b>${fmt(p.pool_chips)}</b> / 門檻 ${fmt(p.threshold)} 喵喵幣</div>
+    <div style="font-size:14px;margin-bottom:6px">目前門檻：<b>${aipoolThresholdText(p.threshold || 0)}</b>${p.my_contrib ? `（我計入 ${fmt(p.my_contrib)}）` : ''}</div>
     <div style="font-size:14px;margin-bottom:10px;color:${color}"><b>${statusTxt}</b></div>
     <div style="font-size:12px;color:var(--muted);line-height:1.8">
       7 天額度：已用 <b>${pct}%</b> ${aipoolBar(pct)}${p.seven_day_reset ? '<br>重置時間：' + new Date(p.seven_day_reset).toLocaleString() : ''}<br>
@@ -1271,6 +1271,22 @@ async function loadAIPool() {
   }
   const my = document.getElementById('aipool-my');
   if (my) my.innerHTML = p.my_contrib ? `我總共捐了 <b>${fmt(p.my_contrib)}</b> 喵喵幣` : '還沒捐過 — 捐了會記在這裡';
+  // ★ 捐獻名單
+  const board = document.getElementById('aipool-board');
+  if (board) {
+    const list = d.board || [];
+    if (!list.length) board.innerHTML = '<span style="color:var(--muted)">還沒有人捐 — 上榜就在上面按下捐贈！</span>';
+    else {
+      board.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+        '<tr style="color:var(--muted)"><td style="padding:3px 6px">#</td><td>玩家</td><td style="text-align:right">捐額</td><td style="text-align:right">佔比</td></tr>' +
+        list.map((r, i) => `<tr>
+          <td style="padding:4px 6px;border-bottom:1px solid var(--border);color:var(--muted)">${i + 1}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid var(--border)">${String(r.username).replace(/</g, '&lt;')}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid var(--border);text-align:right"><b>${fmt(r.amount)}</b></td>
+          <td style="padding:4px 6px;border-bottom:1px solid var(--border);text-align:right">${(r.pct || 0).toFixed(1)}%</td>
+        </tr>`).join('') + '</table>';
+    }
+  }
   const btn = document.getElementById('aipool-btn');
   if (btn && !btn.dataset.hooked) {
     btn.dataset.hooked = '1';
@@ -1289,6 +1305,23 @@ async function loadAIPool() {
         } else { loadAIPool(); }
       } catch (e) { toast(e.message || '捐贈失敗'); }
     });
+  }
+  // ★ 開市按鈕：池子達標且未開市才顯示
+  const openBtn = document.getElementById('aipool-open-btn');
+  if (openBtn) {
+    const canOpen = !p.unlocked && !p.floor_lock && (p.pool_chips >= p.threshold) && (p.threshold < 4503599627370496);
+    openBtn.style.display = canOpen ? '' : 'none';
+    if (canOpen && !openBtn.dataset.hooked) {
+      openBtn.dataset.hooked = '1';
+      openBtn.addEventListener('click', async () => {
+        openBtn.disabled = true; openBtn.textContent = '開市中…';
+        try {
+          await api('POST', '/api/ai/pool/open', {});
+          toast('🎉 開市！Claude 開放一小時', true);
+          loadAIPool();
+        } catch (e) { toast(e.message || '開市失敗'); openBtn.disabled = false; openBtn.textContent = '開市！'; }
+      });
+    }
   }
 }
 
