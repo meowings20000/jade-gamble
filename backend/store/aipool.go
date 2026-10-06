@@ -213,16 +213,20 @@ func (s *Store) AIContributeTx(tx *Tx, userID int, amount int64) (int64, int64, 
 	if amount <= 0 {
 		return 0, 0, ErrInsufficient
 	}
-	// ★ 浮動 cap（2026-10-06 修）：一律算「本輪」（round_total）— 收市歸零後人人重新開始
+	// ★ 浮動 cap（2026-10-06 修）：cap = max(本輪池 × 20%, 起跳額 10 萬)
+	// 一律算「本輪」（round_total）—— 收市歸零後人人重新開始
 	var roundAll, myRound int64
 	_ = tx.QueryRow(`SELECT COALESCE(SUM(round_total),0) FROM ai_contrib`).Scan(&roundAll)
 	_ = tx.QueryRow(`SELECT IFNULL(SUM(round_total),0) FROM ai_contrib WHERE user_id=?`, userID).Scan(&myRound)
 	cap := roundAll * 20 / 100
+	if cap < AIJumpStart {
+		cap = AIJumpStart
+	}
 	if myRound >= cap {
-		return 0, 0, fmt.Errorf("單人上限：本輪池 20%%（目前 %s）— 邀更多人捐，你的容許額會變大", shortNum(cap))
+		return 0, 0, fmt.Errorf("單人上限：本輪 %s（池 %s — 越多人捐你能捐越多）", shortNum(cap), shortNum(roundAll))
 	}
 	if myRound+amount > cap {
-		return 0, 0, fmt.Errorf("超出單人上限：這次最多還能捐 %s（池子越大你能捐越多）", shortNum(cap-myRound))
+		return 0, 0, fmt.Errorf("超出單人上限：這次最多還能捐 %s", shortNum(cap-myRound))
 	}
 	var chips int64
 	if err := tx.QueryRow(`SELECT chips FROM users WHERE id=?`, userID).Scan(&chips); err != nil {
@@ -428,19 +432,26 @@ type Quick20 struct {
 	Chips  int64
 }
 
+// AIJumpStart 起跳額：本輪池 cap 的下限（池空時的第一桶金；user 2026-10-06: 10 萬）
+const AIJumpStart = 100000
+
 func (s *Store) Quick20(userID int) Quick20 {
-	// ★ cap 一律算「本輪」（round_total）—— 收市歸零後人人重新開始
+	// ★ cap = max(本輪池 × 20%, 起跳額 10 萬)（user 2026-10-06 定案）
+	//   池空/小池 → 10 萬起跳（解死鎖）；池大 → 20% 接管（防壟斷）
 	var roundAll, myRound, chips int64
 	_ = s.db.QueryRow(`SELECT COALESCE(SUM(round_total),0) FROM ai_contrib`).Scan(&roundAll)
 	_ = s.db.QueryRow(`SELECT IFNULL(SUM(round_total),0) FROM ai_contrib WHERE user_id=?`, userID).Scan(&myRound)
 	_ = s.db.QueryRow(`SELECT chips FROM users WHERE id=?`, userID).Scan(&chips)
 	target := roundAll * 20 / 100
+	if target < AIJumpStart {
+		target = AIJumpStart
+	}
 	can := target - myRound
 	if can < 0 {
 		can = 0
 	}
 	if can > chips {
-		can = chips // 不超過身家（不然一定被 ErrInsufficient 擋）
+		can = chips
 	}
 	return Quick20{Target: target, My: myRound, Can: can, Chips: chips}
 }
