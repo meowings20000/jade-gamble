@@ -258,7 +258,18 @@ setInterval(() => {
 
 heistEnsurePoll();
 
-// ---------- 同桌嘴砲（兌換所收藏「泡泡框」會套在自己講的話上）----------
+// ---------- 同桌嘴砲＋貓貓表情包（OpenMoji CC BY-SA 4.0）----------
+const HEIST_CAT_MEMES = [
+  { key: 'grin', file: '1F638.svg', words: '好耶！' },
+  { key: 'joy', file: '1F639.svg', words: '笑死喵！' },
+  { key: 'love', file: '1F63B.svg', words: '這顆我愛了！' },
+  { key: 'smirk', file: '1F63C.svg', words: '這把我全都要' },
+  { key: 'kiss', file: '1F63D.svg', words: '合作挖石喵！' },
+  { key: 'angry', file: '1F63E.svg', words: '你等著喵！' },
+  { key: 'cry', file: '1F63F.svg', words: '不要殺我喵…' },
+  { key: 'shock', file: '1F640.svg', words: '完蛋了喵！' }
+];
+
 function heistChatBox() {
   const view = document.getElementById('view-heist');
   if (!view) return null;
@@ -271,20 +282,37 @@ function heistChatBox() {
     const me = (window.__me && window.__me.username) ? window.__me.username : '';
     box.innerHTML = '<div style="font-size:13px;color:var(--gold);font-weight:700;margin-bottom:6px">💬 桌面嘴砲</div>' +
       '<div id="heist-chat-log" style="max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin-bottom:8px"></div>' +
+      '<div id="heist-cat-memes" style="display:flex;gap:5px;overflow-x:auto;padding:2px 0 8px"></div>' +
       '<div class="row" style="gap:6px">' +
       '<input id="heist-chat-in" maxlength="80" placeholder="說點什麼…（2 秒一句）" style="flex:1">' +
       '<button class="btn" id="heist-chat-send">送出</button></div>';
     view.appendChild(box);
+    const postChat = async (text) => {
+      const clean = (text || '').trim();
+      if (!clean) return;
+      try {
+        const r = await api('POST', '/api/heist/say', { text: clean });
+        if (r && r.chat) paintHeistChat(r.chat);
+      } catch (e) { toast(e.message || String(e)); }
+    };
     const send = async () => {
       const inp = document.getElementById('heist-chat-in');
       const text = (inp.value || '').trim();
       if (!text) return;
-      try {
-        const r = await api('POST', '/api/heist/say', { text });
-        inp.value = '';
-        if (r && r.chat) paintHeistChat(r.chat);
-      } catch (e) { toast(e.message || String(e)); }
+      inp.value = '';
+      await postChat(text);
     };
+    const memeBar = box.querySelector('#heist-cat-memes');
+    HEIST_CAT_MEMES.forEach((meme) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn';
+      btn.title = meme.words;
+      btn.style.cssText = 'flex:0 0 auto;width:58px;height:54px;padding:3px;line-height:1';
+      btn.innerHTML = '<img src="/cat-stickers/' + meme.file + '" alt="' + esc(meme.words) + '" style="width:42px;height:42px;display:block;margin:auto">';
+      btn.addEventListener('click', () => postChat('[cat:' + meme.key + '] ' + meme.words));
+      memeBar.appendChild(btn);
+    });
     box.querySelector('#heist-chat-send').addEventListener('click', send);
     box.querySelector('#heist-chat-in').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') send(); });
   }
@@ -301,9 +329,16 @@ function paintHeistChat(chat) {
     const mine = meName && m.name === meName;
     const cls = mine && bubble ? (' ' + bubble) : '';
     const right = mine ? 'text-align:right' : '';
+    const sticker = /^\[cat:([a-z]+)\]\s*(.*)$/.exec(m.text || '');
+    const meme = sticker ? HEIST_CAT_MEMES.find((x) => x.key === sticker[1]) : null;
+    const body = meme
+      ? '<span class="chat-bubble" style="display:inline-flex;align-items:center;gap:7px;padding:5px 9px;border-radius:12px;background:var(--panel2)">' +
+        '<img src="/cat-stickers/' + meme.file + '" alt="貓貓表情" style="width:48px;height:48px">' +
+        '<span>' + esc(sticker[2] || meme.words) + '</span></span>'
+      : '<span class="chat-bubble" style="display:inline-block;padding:3px 9px;border-radius:10px;background:var(--panel2)">' + esc(m.text || '') + '</span>';
     return '<div class="chat-row' + cls + '" style="' + right + '">' +
       '<span style="font-size:12px;color:var(--muted)">' + esc(m.name || '') + '</span> ' +
-      '<span class="chat-bubble" style="display:inline-block;padding:3px 9px;border-radius:10px;background:var(--panel2)">' + esc(m.text || '') + '</span></div>';
+      body + '</div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted)">還沒有人講話…</div>';
   log.scrollTop = log.scrollHeight;
 }

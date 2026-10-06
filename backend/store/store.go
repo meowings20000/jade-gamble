@@ -32,6 +32,12 @@ func Open(path string) (*Store, error) {
 	if err := s.migrate(); err != nil {
 		return nil, err
 	}
+	// 規則調整時同步尚未結束的奪寶桌；歷史紀錄保留原目標。
+	if _, err := db.Exec(`UPDATE heists SET target=CASE grade WHEN 0 THEN ? WHEN 1 THEN ? ELSE ? END
+		WHERE status IN ('open','running')`,
+		domain.HeistTargetFor(domain.KiloGrade), domain.HeistTargetFor(domain.FeatureGrade), domain.HeistTargetFor(domain.WindowGrade)); err != nil {
+		return nil, err
+	}
 	if err := s.loadServerEventCache(); err != nil {
 		return nil, err
 	}

@@ -46,8 +46,8 @@ func TestHeistMutualCoop(t *testing.T) {
 	s := seats(4, 5000)
 	coop(s, 1, 2, 3, 4)
 	r := ResolveHeistRound(s, 0, HeistTargetBase, killRand{})
-	if r.Progress != 6 || r.MutualPair != 6 {
-		t.Errorf("四人互相合作應該 +6 格，得到 progress=%d pair=%d", r.Progress, r.MutualPair)
+	if r.Progress != 8 || r.MutualPair != 6 {
+		t.Errorf("四人全合作應該每人 +1 後整輪 ×2，共 +8 格；得到 progress=%d pair=%d", r.Progress, r.MutualPair)
 	}
 	if len(r.Deaths) != 0 {
 		t.Errorf("沒人背叛不該有人死: %v", r.Deaths)
@@ -122,27 +122,39 @@ func TestHeistRingWipeout(t *testing.T) {
 	if _, dead := r.Deaths[4]; dead {
 		t.Error("合作的那位不該死")
 	}
-	if r.Progress != 6 {
-		t.Errorf("只有一人合作沒有配對，進度應該維持 6，得到 %d", r.Progress)
+	if r.Progress != 7 {
+		t.Errorf("只有一人合作也應自己挖 +1，得到 %d", r.Progress)
 	}
 }
 
 // 獎池：4 人分 = 1.5× 入場費；獨吞 = 6× 入場費。
+func TestHeistSoloCooperateAddsOne(t *testing.T) {
+	s := seats(1, 5000)
+	coop(s, 1)
+	r := ResolveHeistRound(s, 5, HeistTargetBase, killRand{})
+	if r.Progress != 6 {
+		t.Fatalf("一人自己挖一輪應 +1，得到 %d", r.Progress)
+	}
+}
+
 func TestHeistDeadGameDetection(t *testing.T) {
-	// 剩一人無法再增加進度，應立即判定死局。
-	if HeistCanStillReach(KiloGrade, 1, 5, 3) {
-		t.Fatal("剩一人不可能從 5/18 繼續推進，應是死局")
+	if HeistTargetFor(KiloGrade) != 20 || HeistTargetFor(FeatureGrade) != 40 || HeistTargetFor(WindowGrade) != 60 {
+		t.Fatalf("三檔門檻應為 20/40/60，得到 %d/%d/%d", HeistTargetFor(KiloGrade), HeistTargetFor(FeatureGrade), HeistTargetFor(WindowGrade))
 	}
-	// 兩人每輪最多 +1；剩 2 輪時，16/18 還能剛好挖到。
-	if !HeistCanStillReach(KiloGrade, 2, 16, 8) {
-		t.Fatal("兩人剩兩輪可從 16/18 挖到，不應提早結算")
+	// 一人每輪仍只有 +1；剩 7 輪時，13/20 還能剛好挖到。
+	if !HeistCanStillReach(KiloGrade, 1, 13, 3) {
+		t.Fatal("一人剩七輪可從 13/20 挖到，不應提早結算")
 	}
-	// 兩人每輪最多 +1；剩 2 輪時，15/18 已不可能挖到。
-	if HeistCanStillReach(KiloGrade, 2, 15, 8) {
-		t.Fatal("兩人剩兩輪無法從 15/18 挖到，應提早結算")
+	// 一人剩 7 輪只能從 12 推到 19，因此是死局。
+	if HeistCanStillReach(KiloGrade, 1, 12, 3) {
+		t.Fatal("一人剩七輪無法從 12/20 挖到，應提早結算")
+	}
+	// 兩人全合作每輪 (1+1)×2 = +4；剩 2 輪時，12/20 可剛好挖到。
+	if !HeistCanStillReach(KiloGrade, 2, 12, 8) {
+		t.Fatal("兩人剩兩輪可從 12/20 挖到，不應提早結算")
 	}
 	// 已達目標不是死局，而是正常成功結算。
-	if !HeistCanStillReach(KiloGrade, 1, 18, 3) {
+	if !HeistCanStillReach(KiloGrade, 1, 20, 3) {
 		t.Fatal("已達目標應視為可完成")
 	}
 }

@@ -131,12 +131,17 @@ func ResolveHeistRound(seats []HeistSeat, progress, target int, r Rand) HeistRou
 		}
 	}
 	res.MutualPair = coop * (coop - 1) / 2
-	if res.MutualPair > 0 {
-		res.Progress += res.MutualPair
+	// 每個合作者基礎 +1；人越多合作，該輪推進越多。
+	progressGain := coop
+	if coop > 1 && coop == len(alive) {
+		progressGain *= 2 // 所有在場玩家全合作：該輪進度 ×2；單人仍是 +1
+	}
+	if progressGain > 0 {
+		res.Progress += progressGain
 		if res.Progress > target {
 			res.Progress = target
 		}
-		res.Log = append(res.Log, fmt.Sprintf("%d 人互相合作，進度 +%d（%d/%d）", coop, res.MutualPair, res.Progress, target))
+		res.Log = append(res.Log, fmt.Sprintf("%d 人合作挖掘，進度 +%d（%d/%d）", coop, progressGain, res.Progress, target))
 	}
 
 	// 2) 背叛：沒被對方背叛的人死（同時結算）
@@ -208,7 +213,16 @@ func HeistPayoutIfDug(grade ShopGrade, pot int, alive []int, progress, target in
 }
 
 // 入場費越高、難度越高（用戶指定）：每高一檔 +4 格進度、+1 回合上限。
-func HeistTargetFor(grade ShopGrade) int { return HeistTargetBase + 4*int(grade) }
+func HeistTargetFor(grade ShopGrade) int {
+	switch grade {
+	case KiloGrade:
+		return 20
+	case FeatureGrade:
+		return 40
+	default:
+		return 60
+	}
+}
 func HeistRoundsFor(grade ShopGrade) int {
 	// 2026-10-06 user：輪數 10~15（kg 10 / 表現 12～13 / 開窗 15）
 	switch grade {
@@ -229,9 +243,12 @@ func HeistCanStillReach(grade ShopGrade, alive, progress, roundsDone int) bool {
 		return true
 	}
 	remaining := HeistRoundsFor(grade) - roundsDone
-	if remaining <= 0 || alive < 2 {
+	if remaining <= 0 || alive == 0 {
 		return false
 	}
-	maxPerRound := alive * (alive - 1) / 2
+	maxPerRound := 1
+	if alive > 1 {
+		maxPerRound = alive * 2 // 全員合作觸發該輪 ×2
+	}
 	return progress+remaining*maxPerRound >= target
 }

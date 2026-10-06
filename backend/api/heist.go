@@ -71,8 +71,8 @@ func (a *API) heistState(w http.ResponseWriter, r *http.Request) error {
 			{"grade": int(domain.WindowGrade), "name": "開窗料", "fee": domain.HeistEntry(domain.WindowGrade),
 				"pot": domain.HeistPot(domain.WindowGrade), "target": domain.HeistTargetFor(domain.WindowGrade), "rounds": domain.HeistRoundsFor(domain.WindowGrade)},
 		},
-		"rules": "四人一桌、30 秒一輪（沒出手＝自動合作）。互相合作才推進度（四人全合作 +6 格/輪）。" +
-			"入場費越高越難：公斤料 18 格／10 輪、表現料 22 格／12 輪、開窗料 26 格／15 輪。" +
+		"rules": "四人一桌、30 秒一輪（沒出手＝自動合作）。每個合作玩家 +1；所有在場玩家全合作時該輪進度 ×2（四人全合作 +8，單人仍 +1）。" +
+			"三檔進度門檻：公斤料 20 格／10 輪、表現料 40 格／12 輪、開窗料 60 格／15 輪。" +
 			"每人一輪一張背叛票：60% 刺殺成功（他死、你拿他 70% 入場費）／20% 被反殺（你自己死、對方拿你 70% 入場費）／20% 無事發生（虛驚一場）；對方也背叛你 → 互相抵銷，兩個都沒死（但他知道你想殺他）。" +
 			"全員同時背叛＝礦坑崩塌，全部陪葬、獎池沒收；只有挖到目標才發獎池，回合用完或已成死局但沒挖到都算失敗。",
 	}

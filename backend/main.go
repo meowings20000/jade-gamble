@@ -130,6 +130,8 @@ func spaHandler() http.Handler {
 			ctype = "text/javascript; charset=utf-8"
 		case strings.HasSuffix(name, ".css"):
 			ctype = "text/css"
+		case strings.HasSuffix(name, ".svg"):
+			ctype = "image/svg+xml"
 		}
 		w.Header().Set("Content-Type", ctype)
 		// no-store：前端沒有 build step，改了就必須立刻生效。

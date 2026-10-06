@@ -39,6 +39,10 @@ frontend/ 原生 JS + Canvas 程序化渲染（seed → 同顆石全端一致）
 Dockerfile 單容器 golang:1.25-alpine → alpine:3.20（非 root）
 ```
 
+## 素材授權
+
+- 奪寶桌貓貓表情包使用 [OpenMoji](https://openmoji.org/) 圖示，授權為 CC BY-SA 4.0；Copyright © HfG Schwäbisch Gmünd。
+
 - **防作弊**：石頭真值只在伺服器；客戶端只拿 `{seed, grade, hint, revealed[]}`，seed 只決定外觀，決定不了內容。API 測試斷言貨架/市場回應不得洩漏 `quality/variety/cracks`
 - **競標一致性**：同 seed 全端畫出同一顆石（前端測試斷言 10 種異色調色板 + 渲染確定性）
 
