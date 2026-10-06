@@ -213,20 +213,16 @@ func (s *Store) AIContributeTx(tx *Tx, userID int, amount int64) (int64, int64, 
 	if amount <= 0 {
 		return 0, 0, ErrInsufficient
 	}
-	// ★ 浮動 cap（user 2026-10-06）：我的累計 + 這次 ≤ 全池總捐 × 20%
-	//   全池 = 已收到的真實總捐（ai_contrib SUM）；我還沒捐過 → 我能捐到「目前全池×20%」
-	//   註：全池 < 我的累計×5 時會擋 → 推著其他人也捐（浮動的意義）
-	var total int64
-	_ = tx.QueryRow(`SELECT COALESCE(SUM(total),0) FROM ai_contrib`).Scan(&total)
-	var myAlready int64
-	_ = tx.QueryRow(`SELECT total FROM ai_contrib WHERE user_id=?`, userID).Scan(&myAlready)
-	// 我的計入基準 = min(我的累計, 目前 cap)（超歷史額時以 cap 為準）
-	cap := total * 20 / 100
-	if myAlready >= cap {
-		return 0, 0, fmt.Errorf("單人上限：池子 20%%（目前 %s）— 邀更多人捐，你的容許額會變大", shortNum(cap))
+	// ★ 浮動 cap（2026-10-06 修）：一律算「本輪」（round_total）— 收市歸零後人人重新開始
+	var roundAll, myRound int64
+	_ = tx.QueryRow(`SELECT COALESCE(SUM(round_total),0) FROM ai_contrib`).Scan(&roundAll)
+	_ = tx.QueryRow(`SELECT IFNULL(SUM(round_total),0) FROM ai_contrib WHERE user_id=?`, userID).Scan(&myRound)
+	cap := roundAll * 20 / 100
+	if myRound >= cap {
+		return 0, 0, fmt.Errorf("單人上限：本輪池 20%%（目前 %s）— 邀更多人捐，你的容許額會變大", shortNum(cap))
 	}
-	if myAlready+amount > cap {
-		return 0, 0, fmt.Errorf("超出單人上限：這次最多還能捐 %s（池子越大你能捐越多）", shortNum(cap-myAlready))
+	if myRound+amount > cap {
+		return 0, 0, fmt.Errorf("超出單人上限：這次最多還能捐 %s（池子越大你能捐越多）", shortNum(cap-myRound))
 	}
 	var chips int64
 	if err := tx.QueryRow(`SELECT chips FROM users WHERE id=?`, userID).Scan(&chips); err != nil {
@@ -433,17 +429,18 @@ type Quick20 struct {
 }
 
 func (s *Store) Quick20(userID int) Quick20 {
-	var total, my, chips int64
-	_ = s.db.QueryRow(`SELECT COALESCE(SUM(total),0) FROM ai_contrib`).Scan(&total)
-	_ = s.db.QueryRow(`SELECT IFNULL(SUM(total),0) FROM ai_contrib WHERE user_id=?`, userID).Scan(&my)
+	// ★ cap 一律算「本輪」（round_total）—— 收市歸零後人人重新開始
+	var roundAll, myRound, chips int64
+	_ = s.db.QueryRow(`SELECT COALESCE(SUM(round_total),0) FROM ai_contrib`).Scan(&roundAll)
+	_ = s.db.QueryRow(`SELECT IFNULL(SUM(round_total),0) FROM ai_contrib WHERE user_id=?`, userID).Scan(&myRound)
 	_ = s.db.QueryRow(`SELECT chips FROM users WHERE id=?`, userID).Scan(&chips)
-	target := total * 20 / 100
-	can := target - my
+	target := roundAll * 20 / 100
+	can := target - myRound
 	if can < 0 {
 		can = 0
 	}
-	if userWantsMore := chips; can > userWantsMore {
-		can = userWantsMore // 不超過身家（不然一定被 ErrInsufficient 擋）
+	if can > chips {
+		can = chips // 不超過身家（不然一定被 ErrInsufficient 擋）
 	}
-	return Quick20{Target: target, My: my, Can: can, Chips: chips}
+	return Quick20{Target: target, My: myRound, Can: can, Chips: chips}
 }

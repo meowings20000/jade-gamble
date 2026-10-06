@@ -1332,9 +1332,9 @@ function aipoolThresholdText(th) {
   if (th > 4503599627370496) return '鎖死（剩餘 <10%）';
   return fmt(th) + ' 喵喵幣';
 }
-async function loadAIPool() {
+async function loadAIPool(silent) {
   let d;
-  try { d = await api('GET', '/api/ai/pool'); } catch (e) { $('#aipool-state').textContent = '載入失敗：' + (e.message || e); return; }
+  try { d = await api('GET', '/api/ai/pool'); } catch (e) { if (!silent) $('#aipool-state').textContent = '載入失敗：' + (e.message || e); return; }
   const p = d.pool || {};
   clawdMount(p);
   const st = document.getElementById('aipool-state');
@@ -1385,6 +1385,13 @@ async function loadAIPool() {
     }
   }
   const btn = document.getElementById('aipool-btn');
+  // ★ 自動刷新（60 秒）：站著不動也看到最新額度/池子（只在頁面 active 時）
+  if (!window.__aipoolTick) {
+    window.__aipoolTick = setInterval(() => {
+      const v = document.getElementById('view-aipool');
+      if (v && v.classList.contains('active')) loadAIPool(true);
+    }, 60000);
+  }
   if (btn && !btn.dataset.hooked) {
     btn.dataset.hooked = '1';
     btn.addEventListener('click', async () => {
