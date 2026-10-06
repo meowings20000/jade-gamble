@@ -3,7 +3,6 @@ package api
 import (
 	"errors"
 	"fmt"
-	"math"
 	"net/http"
 	"strings"
 
@@ -73,9 +72,9 @@ func (a *API) heistState(w http.ResponseWriter, r *http.Request) error {
 				"pot": domain.HeistPot(domain.WindowGrade), "target": domain.HeistTargetFor(domain.WindowGrade), "rounds": domain.HeistRoundsFor(domain.WindowGrade)},
 		},
 		"rules": "四人一桌、30 秒一輪（沒出手＝自動合作）。互相合作才推進度（四人全合作 +6 格/輪）。" +
-			"入場費越高越難：公斤料 18 格／5 輪、表現料 22 格／6 輪、開窗料 26 格／7 輪。" +
+			"入場費越高越難：公斤料 18 格／10 輪、表現料 22 格／12 輪、開窗料 26 格／15 輪。" +
 			"每人一輪一張背叛票：60% 刺殺成功（他死、你拿他 70% 入場費）／20% 被反殺（你自己死、對方拿你 70% 入場費）／20% 無事發生（虛驚一場）；對方也背叛你 → 互相抵銷，兩個都沒死（但他知道你想殺他）。" +
-			"全員同時背叛＝礦坑崩塌，全部陪葬、獎池沒收；只剩一人獨吞 6 倍入場費。",
+			"全員同時背叛＝礦坑崩塌，全部陪葬、獎池沒收；只有挖到目標才發獎池，回合用完或已成死局但沒挖到都算失敗。",
 	}
 	// 大廳：誰在排隊、還缺幾人成團
 	if qs, err := a.Store.OpenHeistQueues(); err == nil {
@@ -458,23 +457,18 @@ func (a *API) resolveHeistRound(h *store.Heist) error {
 			alive = append(alive, s.UserID)
 		}
 	}
-	// ★ 完場條件（2026-10-06 user 修正）：剩 1 人 + 進度未滿 ≠ 完場 —— 他一個人可以繼續挖到挖到/輪數用完
-	//   完場只有：崩塌／全滅／挖到目標／輪數用完
-	done := res.Collapse || len(alive) == 0 || res.Progress >= h.Target || round >= domain.HeistRoundsFor(domain.ShopGrade(h.Grade))
+	grade := domain.ShopGrade(h.Grade)
+	// 死局提前結算：按目前存活人數計算之後每輪都全員合作的理論最高進度；
+	// 若仍到不了目標，就不再讓玩家空等剩餘回合。
+	deadGame := !domain.HeistCanStillReach(grade, len(alive), res.Progress, round)
+	done := res.Collapse || len(alive) == 0 || res.Progress >= h.Target ||
+		round >= domain.HeistRoundsFor(grade) || deadGame
 	if !done {
 		return nil
 	}
-	payout := map[int]int{}
-	switch {
-	case res.Collapse || len(alive) == 0: // 崩塌／全滅：獎池沒收
-		payout = map[int]int{}
-	case len(alive) == 1: // 獨吞
-		payout = domain.HeistPayout(domain.ShopGrade(h.Grade), h.Pot, alive)
-	case res.Progress >= h.Target: // 一起挖到
-		payout = domain.HeistPayout(domain.ShopGrade(h.Grade), h.Pot, alive)
-	default: // 5 輪用完還沒挖到：入場費沒收
-		payout = map[int]int{}
-	}
+	// 只有真正挖到目標才發獎池。獨活、回合用完或死局都算失敗，
+	// 避免「把其他人全殺掉就能提早獨吞」成為最佳策略。
+	payout := domain.HeistPayoutIfDug(grade, h.Pot, alive, res.Progress, h.Target)
 	// ★ 集中活動 heist_bonus：獎池再 ×1.5
 	if len(payout) > 0 && a.Store.EventHeistBoost() {
 		for uid2, amt := range payout {
@@ -482,14 +476,6 @@ func (a *API) resolveHeistRound(h *store.Heist) error {
 		}
 	}
 	return a.Store.WithTx(func(tx *store.Tx) error {
-		// 獎池按進度折算（用戶 2026-09-16 定案）：沒挖到就拿不到滿額。
-		// 例：進度 4/18 只剩一人 → 只拿 4/18 的獎池，不再是「沒挖到卻獨吞全部」。
-		if len(payout) > 0 && h.Target > 0 && res.Progress < h.Target {
-			scale := float64(res.Progress) / float64(h.Target)
-			for uid, amt := range payout {
-				payout[uid] = int(math.Round(float64(amt) * scale))
-			}
-		}
 		return a.Store.FinishHeistTx(tx, h.ID, payout)
 	})
 }

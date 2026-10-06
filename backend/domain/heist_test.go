@@ -128,6 +128,38 @@ func TestHeistRingWipeout(t *testing.T) {
 }
 
 // 獎池：4 人分 = 1.5× 入場費；獨吞 = 6× 入場費。
+func TestHeistDeadGameDetection(t *testing.T) {
+	// 剩一人無法再增加進度，應立即判定死局。
+	if HeistCanStillReach(KiloGrade, 1, 5, 3) {
+		t.Fatal("剩一人不可能從 5/18 繼續推進，應是死局")
+	}
+	// 兩人每輪最多 +1；剩 2 輪時，16/18 還能剛好挖到。
+	if !HeistCanStillReach(KiloGrade, 2, 16, 8) {
+		t.Fatal("兩人剩兩輪可從 16/18 挖到，不應提早結算")
+	}
+	// 兩人每輪最多 +1；剩 2 輪時，15/18 已不可能挖到。
+	if HeistCanStillReach(KiloGrade, 2, 15, 8) {
+		t.Fatal("兩人剩兩輪無法從 15/18 挖到，應提早結算")
+	}
+	// 已達目標不是死局，而是正常成功結算。
+	if !HeistCanStillReach(KiloGrade, 1, 18, 3) {
+		t.Fatal("已達目標應視為可完成")
+	}
+}
+
+func TestHeistUnfinishedMinePaysNoPot(t *testing.T) {
+	pot := HeistPot(FeatureGrade)
+	// 就算只剩一人，只要回合用完或已成死局但沒挖到目標，獎池都應沒收。
+	if got := HeistPayoutIfDug(FeatureGrade, pot, []int{1}, 21, 22); len(got) != 0 {
+		t.Fatalf("未挖到目標不應因獨活拿獎池，得到 %v", got)
+	}
+	// 真正挖到才由倖存者平分。
+	got := HeistPayoutIfDug(FeatureGrade, pot, []int{1, 2}, 22, 22)
+	if got[1] != pot/2 || got[2] != pot/2 {
+		t.Fatalf("挖到後應平分獎池，得到 %v", got)
+	}
+}
+
 func TestHeistPayout(t *testing.T) {
 	for _, g := range []ShopGrade{KiloGrade, FeatureGrade, WindowGrade} {
 		pot := HeistPot(g)

@@ -58,7 +58,7 @@ function renderHeist(d) {
               <div style="font-weight:700;margin-bottom:6px">${name}</div>
               <div style="font-size:13px;color:var(--muted)">入場費 <b style="color:var(--text)">${fmt(d.fees[k])}</b></div>
               <div style="font-size:13px;color:var(--muted)">寶石價值 <b style="color:var(--gold)">${fmt(d.pots[k])}</b></div>
-              <div style="font-size:12px;color:var(--muted);margin:6px 0">平分每人 ${fmt(Math.floor(d.pots[k] / 4))}｜獨吞 ${fmt(d.pots[k])}</div>
+              <div style="font-size:12px;color:var(--muted);margin:6px 0">挖到才發獎｜四人平分各 ${fmt(Math.floor(d.pots[k] / 4))}</div>
               <button type="button" onclick="heistJoin(${g})" style="width:100%">入場</button>
             </div>`).join('')}
         </div>

@@ -154,11 +154,11 @@ func ResolveHeistRound(seats []HeistSeat, progress, target int, r Rand) HeistRou
 			continue
 		}
 		roll := HeistKillRoll(r) // 整數分桶：0-19 被反殺、20-39 無事、40-99 成功
-			if roll < 20 {
-				// 20% 被反殺：動手的人自己死，目標活著並拿走他 70% 入場費
-				// ★ killed_by 寫「-victim」＝反殺標記（死者是先動手的，victim 是自衛）— 前端 abs+顯示「反殺」
-				res.Deaths[s.UserID] = -victim.UserID
-				res.Exposed[s.UserID] = victim.UserID
+		if roll < 20 {
+			// 20% 被反殺：動手的人自己死，目標活著並拿走他 70% 入場費
+			// ★ killed_by 寫「-victim」＝反殺標記（死者是先動手的，victim 是自衛）— 前端 abs+顯示「反殺」
+			res.Deaths[s.UserID] = -victim.UserID
+			res.Exposed[s.UserID] = victim.UserID
 			res.Looters[victim.UserID] += int(float64(s.Entry) * HeistKillTake)
 			res.Misses = append(res.Misses, [2]int{s.UserID, victim.UserID})
 			res.Log = append(res.Log, fmt.Sprintf("%s 想殺 %s，反被對方做掉——%s 拿走他 70%% 入場費", s.Name, victim.Name, victim.Name))
@@ -198,6 +198,15 @@ func HeistPayout(grade ShopGrade, pot int, alive []int) map[int]int {
 	return out
 }
 
+// HeistPayoutIfDug 只有真正挖到目標才發獎池。
+// 獨活、回合用完或數學上已成死局，都不能把未挖出的寶石帶走。
+func HeistPayoutIfDug(grade ShopGrade, pot int, alive []int, progress, target int) map[int]int {
+	if progress < target {
+		return map[int]int{}
+	}
+	return HeistPayout(grade, pot, alive)
+}
+
 // 入場費越高、難度越高（用戶指定）：每高一檔 +4 格進度、+1 回合上限。
 func HeistTargetFor(grade ShopGrade) int { return HeistTargetBase + 4*int(grade) }
 func HeistRoundsFor(grade ShopGrade) int {
@@ -210,4 +219,19 @@ func HeistRoundsFor(grade ShopGrade) int {
 	default:
 		return 15
 	}
+}
+
+// HeistCanStillReach 判斷以目前存活人數、進度與已完成回合數，
+// 就算之後每輪全員合作，是否仍有機會在回合上限前挖到目標。
+func HeistCanStillReach(grade ShopGrade, alive, progress, roundsDone int) bool {
+	target := HeistTargetFor(grade)
+	if progress >= target {
+		return true
+	}
+	remaining := HeistRoundsFor(grade) - roundsDone
+	if remaining <= 0 || alive < 2 {
+		return false
+	}
+	maxPerRound := alive * (alive - 1) / 2
+	return progress+remaining*maxPerRound >= target
 }
