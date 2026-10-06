@@ -124,12 +124,12 @@ function heistKillerName(killerID, me, others) {
         ${h.status === 'open' ? `<button type="button" onclick="heistFill()" class="hbtn hbtn-pill">🎲 直接開局（補 bot）</button>` : ''}
         <button type="button" onclick="heistLeave()" class="hbtn hbtn-ghost hbtn-pill">🚪 ${done ? '離開桌子' : '退出排隊（退還入場費）'}</button>
       </div>` : `
+      ${!me.alive ? `<div style="margin-top:12px"><button type="button" onclick="heistLeave()" class="hbtn hbtn-ghost hbtn-pill">🚪 已出局，離開桌子喵</button></div>` : `
       <div class="hrow" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-        ${h.status === 'open' ? `<button type="button" onclick="heistFill()" class="hbtn hbtn-pill">🎲 直接開局（補 bot）</button>` : ''}
         <button type="button" onclick="heistAct('cooperate',0)" class="hbtn hbtn-coop hbtn-pill">🤝 合作（推進度）</button>
         <span style="font-size:12px;color:var(--muted);align-self:center">或按上面某個對手的「背叛他」——一輪只能對一個人下手</span>
       </div>
-      <div style="font-size:12px;color:var(--muted);margin-top:8px">${me.my_action === 'betray' ? '你這一輪已出手：<b>🔪 背叛</b>' : me.my_action === 'cooperate' ? '你這一輪已出手：<b>🤝 合作</b>' : '還沒出手（30 秒內出手，全員出手即結算）'}</div>`}
+      <div style="font-size:12px;color:var(--muted);margin-top:8px">${me.my_action === 'betray' ? '你這一輪已出手：<b>🔪 背叛</b>' : me.my_action === 'cooperate' ? '你這一輪已出手：<b>🤝 合作</b>' : '還沒出手（30 秒內出手，全員出手即結算）'}</div>`}`}
     </div>
     ${log.length ? `<div class="card"><h3>我的奪寶紀錄</h3>${log.map((r) => `
       <div style="font-size:13px;padding:3px 0;border-bottom:1px solid var(--border)">
@@ -267,7 +267,23 @@ const HEIST_CAT_MEMES = [
   { key: 'kiss', file: '1F63D.svg', words: '合作挖石喵！' },
   { key: 'angry', file: '1F63E.svg', words: '你等著喵！' },
   { key: 'cry', file: '1F63F.svg', words: '不要殺我喵…' },
-  { key: 'shock', file: '1F640.svg', words: '完蛋了喵！' }
+  { key: 'shock', file: '1F640.svg', words: '完蛋了喵！' },
+  { key: 'smile', file: '1F63A.svg', words: '今天心情好喵' },
+  { key: 'watch', file: '1F431.svg', words: '我盯著你喵' },
+  { key: 'walk', file: '1F408.svg', words: '我先溜了喵' },
+  { key: 'black', file: '1F408-200D-2B1B.svg', words: '偷偷摸摸喵' },
+  { key: 'tiger', file: '1F42F.svg', words: '兇起來了喵！' },
+  { key: 'lion', file: '1F981.svg', words: '王者登場喵！' },
+  { key: 'b-angry', file: 'bitty-angry.svg', words: '真的生氣了！' },
+  { key: 'b-cool', file: 'bitty-cool.svg', words: '這把穩了' },
+  { key: 'b-happy', file: 'bitty-happy.svg', words: '開心到起飛！' },
+  { key: 'b-kiss', file: 'bitty-kiss.svg', words: '給你一個親親' },
+  { key: 'b-laugh', file: 'bitty-laugh.svg', words: '哈哈哈哈哈！' },
+  { key: 'b-sad', file: 'bitty-sad.svg', words: '貓貓難過…' },
+  { key: 'b-speechless', file: 'bitty-speechless.svg', words: '我無言了喵' },
+  { key: 'b-tongue', file: 'bitty-tongue.svg', words: '略略略～' },
+  { key: 'b-wink', file: 'bitty-wink.svg', words: '你懂的喵' },
+  { key: 'b-wow', file: 'bitty-wow.svg', words: '真的假的？！' }
 ];
 
 function heistChatBox() {

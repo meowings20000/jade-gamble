@@ -541,8 +541,28 @@ func (a *API) heistLeave(w http.ResponseWriter, r *http.Request) error {
 		writeJSON(w, 200, map[string]any{"ok": true, "message": "已離開這桌（紀錄留在「我的奪寶紀錄」）"})
 		return nil
 	}
+	if h.Status == "running" {
+		seats, err := a.Store.HeistSeats(h.ID)
+		if err != nil {
+			return err
+		}
+		for _, seat := range seats {
+			if seat.UserID != uid {
+				continue
+			}
+			if seat.Alive {
+				return errors.New("你還活著，不能中途離開喵")
+			}
+			if err := a.Store.MarkHeistSeatLeft(h.ID, uid); err != nil {
+				return err
+			}
+			writeJSON(w, 200, map[string]any{"ok": true, "message": "你已出局並離開桌子，紀錄仍會保留喵"})
+			return nil
+		}
+		return errors.New("找不到你的座位")
+	}
 	if h.Status != "open" {
-		return errors.New("這桌已經開局或結束了，不能退費")
+		return errors.New("這桌已經結束了")
 	}
 	var bal int
 	if err := a.Store.WithTx(func(tx *store.Tx) error {

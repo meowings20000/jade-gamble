@@ -107,6 +107,7 @@ func (s *Store) MyHeist(userID int) (*Heist, error) {
 	return scanHeist(s.db.QueryRow(`SELECT h.id, h.grade, h.entry, h.pot, h.progress, h.target, h.round, h.status, h.created_at
 		FROM heists h JOIN heist_seats s ON s.heist_id = h.id
 		WHERE s.user_id=? AND h.status IN ('open','running')
+		  AND s.left=0
 		  AND (SELECT COUNT(*) FROM heist_seats s2 WHERE s2.heist_id=h.id) <= ?
 		ORDER BY h.id DESC LIMIT 1`, userID, domain.HeistSeats))
 }

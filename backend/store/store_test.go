@@ -43,6 +43,36 @@ func TestServerEventLookupInsideTransactionDoesNotDeadlock(t *testing.T) {
 	}
 }
 
+func TestDeadHeistPlayerCanLeaveWithoutDeletingHistory(t *testing.T) {
+	s := openTestDB(t)
+	u, err := s.CreateUser("dead-leaver", "死掉的貓", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := s.db.Exec(`INSERT INTO heists (grade,entry,pot,progress,target,round,status) VALUES (0,1000,30000,5,20,2,'running')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hid64, _ := res.LastInsertId()
+	hid := int(hid64)
+	if _, err := s.db.Exec(`INSERT INTO heist_seats (heist_id,user_id,alive,action,target,entry,left) VALUES (?,?,0,'',0,1000,0)`, hid, u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if h, _ := s.MyHeist(u.ID); h == nil {
+		t.Fatal("離開前應仍在進行中的桌子")
+	}
+	if err := s.MarkHeistSeatLeft(hid, u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if h, _ := s.MyHeist(u.ID); h != nil {
+		t.Fatal("死者選擇離開後不應再卡在桌面")
+	}
+	seats, err := s.HeistSeats(hid)
+	if err != nil || len(seats) != 1 {
+		t.Fatalf("離開只隱藏座位，歷史仍需保留：seats=%d err=%v", len(seats), err)
+	}
+}
+
 func TestUserAndChips(t *testing.T) {
 	s := openTestDB(t)
 	u, err := s.CreateUser("discord123", "tester", "av.png")
