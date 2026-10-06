@@ -47,10 +47,20 @@ const AIFloorLockPct = 15.0
 // 單人捐贈上限（浮動）：每人累計 ≤ 全池總捐的 20%（別人捐多你也能捐多）
 func aiThreshold(sevenDayUtil float64) int64 {
 	remain := 100.0 - sevenDayUtil
-	if remain < AIFloorLockPct {
+	switch {
+	case remain < AIFloorLockPct:
 		return 1 << 62 // 底線鎖死：實際上達不到
+	case remain < 25:
+		return 2_000_000
+	case remain < 40:
+		return 1_500_000
+	case remain < 60:
+		return 1_000_000
+	case remain < 80:
+		return 750_000
+	default:
+		return 500_000
 	}
-	return 500_000 // 測試期固定門檻
 }
 
 // AIPoolEnsure 建表
@@ -77,9 +87,14 @@ func (s *Store) AIPoolEnsure() error {
 	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS ai_contrib (
 		user_id INTEGER PRIMARY KEY,
 		total INTEGER NOT NULL DEFAULT 0,
-		last_at TEXT NOT NULL DEFAULT ''
+		last_at TEXT NOT NULL DEFAULT '',
+		round_total INTEGER NOT NULL DEFAULT 0
 	)`); err != nil {
 		return err
+	}
+	// 舊庫補欄位（2026-10-06 本輪捐贈：收市時歸零）
+	if _, err := s.db.Exec(`ALTER TABLE ai_contrib ADD COLUMN round_total INTEGER NOT NULL DEFAULT 0`); err != nil {
+		var _ = err
 	}
 	_, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS ai_pool_log (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -239,8 +254,9 @@ func (s *Store) AIContributeTx(tx *Tx, userID int, amount int64) (int64, int64, 
 		}
 		pool += amount
 	}
-	if _, err := tx.Exec(`INSERT INTO ai_contrib (user_id, total, last_at) VALUES (?,?,datetime('now'))
-		ON CONFLICT(user_id) DO UPDATE SET total=total+excluded.total, last_at=excluded.last_at`, userID, amount); err != nil {
+	if _, err := tx.Exec(`INSERT INTO ai_contrib (user_id, total, last_at, round_total) VALUES (?,?,datetime('now'),?)
+		ON CONFLICT(user_id) DO UPDATE SET total=total+excluded.total, last_at=excluded.last_at,
+			round_total=round_total+excluded.round_total`, userID, amount, amount); err != nil {
 		return 0, 0, err
 	}
 	if _, err := tx.Exec(`INSERT INTO ai_pool_log (user_id, amount, pool_after) VALUES (?,?,?)`, userID, amount, pool); err != nil {
@@ -287,8 +303,11 @@ func (s *Store) AISync(snap AIUsageSnapshot, now time.Time) (view AIPoolView, un
 		// ★ 開市中（open_until 未過）→ 一律維持，不能關（user 2026-10-06:「開著的情況 不能關掉」)
 		// 保險絲（底線/5h 撞牆）也不收市 —— 撞牆時反正打不出去，等窗口重置即可
 	case unlocked && !marketOpen:
-		// open_until 過期 → 收市
+		// open_until 過期 → 收市（本輪捐贈歸零；總捐保留）
 		if _, e := s.db.Exec(`UPDATE ai_pool SET unlocked=0, open_until='' WHERE id=1`); e != nil {
+			return view, false, false, e
+		}
+		if e := s.AIRoundReset(); e != nil {
 			return view, false, false, e
 		}
 		unlocked = false
@@ -356,7 +375,9 @@ func (s *Store) AIContribList(limit int) ([]map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.db.Query(`SELECT a.user_id, u.username, a.total, a.last_at
+	var roundTotal int64
+	_ = s.db.QueryRow(`SELECT COALESCE(SUM(round_total),0) FROM ai_contrib`).Scan(&roundTotal)
+	rows, err := s.db.Query(`SELECT a.user_id, u.username, a.total, a.round_total, a.last_at
 		FROM ai_contrib a LEFT JOIN users u ON u.id=a.user_id
 		ORDER BY a.total DESC LIMIT ?`, limit)
 	if err != nil {
@@ -368,21 +389,31 @@ func (s *Store) AIContribList(limit int) ([]map[string]any, error) {
 		var uid int64
 		var name string
 		var lastAt string
-		var amt int64
-		if err := rows.Scan(&uid, &name, &amt, &lastAt); err != nil {
+		var amt, roundAmt int64
+		if err := rows.Scan(&uid, &name, &amt, &roundAmt, &lastAt); err != nil {
 			return nil, err
 		}
 		pct := 0.0
 		if total > 0 {
 			pct = float64(amt) / float64(total) * 100
 		}
+		roundPct := 0.0
+		if roundTotal > 0 {
+			roundPct = float64(roundAmt) / float64(roundTotal) * 100
+		}
 		if name == "" {
 			name = "神秘玩家"
 		}
 		out = append(out, map[string]any{
-			"user_id": uid, "username": name, "amount": amt,
-			"pct": pct, "last_at": lastAt,
+			"user_id": uid, "username": name, "amount": amt, "round_amount": roundAmt,
+			"pct": pct, "round_pct": roundPct, "last_at": lastAt,
 		})
 	}
 	return out, rows.Err()
+}
+
+// AIRoundReset 收市時：本輪捐贈歸零（總捐保留）
+func (s *Store) AIRoundReset() error {
+	_, err := s.db.Exec(`UPDATE ai_contrib SET round_total=0`)
+	return err
 }

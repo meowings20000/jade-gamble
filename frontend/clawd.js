@@ -111,6 +111,7 @@ function clawdParty() {
     </path>
     <ellipse cx="56" cy="84" rx="28" ry="22" fill="#D97757"/>
     <circle cx="56" cy="84" r="12" fill="#F5E6D3"/>
+    ${clawdBurst(56, 84, 7.5)}
     <path d="M34 56 l-5 -19 l17 9 z" fill="#D97757"/>
     <path d="M78 56 l5 -19 l-17 9 z" fill="#D97757"/>
     <circle cx="56" cy="54" r="23" fill="#D97757"/>
