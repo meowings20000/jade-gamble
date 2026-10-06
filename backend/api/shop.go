@@ -244,6 +244,29 @@ func (a *API) shopBuy(w http.ResponseWriter, r *http.Request) error {
 	}); err != nil {
 		return err
 	}
+	// ★ 賣光自動補貨（2026-10-06 玩家回報「買完不會自動刷新」）：
+	// 買走後貨架全空 → 免費立刻補滿一輪（不動階梯、不計刷新次數）
+	if n, _ := a.Store.ShelfItemCount(uid, g); n == 0 {
+		if err := a.Store.WithTx(func(tx *store.Tx) error {
+			if err := a.Store.ClearShelfTx(tx, uid, g); err != nil {
+				return err
+			}
+			for i := 0; i < domain.ShelfSize(g); i++ {
+				st2 := domain.GenerateStone(g, domain.RandSource)
+				st2.OwnerID = uid
+				st2.State = domain.StateShop
+				if err := a.Store.SaveStoneTx(tx, st2); err != nil {
+					return err
+				}
+				if err := a.Store.FillShelfSlotTx(tx, uid, g, st2.ID); err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
 	// golden eye buff: reveal an extra true feature tag on feature stones
 	writeJSON(w, 200, map[string]any{"ok": true, "chips": newBal, "stone_id": st.ID})
 	return nil

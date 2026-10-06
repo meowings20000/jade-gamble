@@ -444,8 +444,17 @@ func (s *Store) MarkLit(stoneID string, userID int) error {
 	return err
 }
 
-// EquippedFrame: 玩家有沒有金的／帝王的頭像框（兌換所的裝飾品）。
+// EquippedFrame: 玩家自己裝備的頭像框（2026-10-06 起可自選；欄位空 = 自動用最貴的擁有框）。
 func (s *Store) EquippedFrame(userID int) string {
+	var ef string
+	if err := s.db.QueryRow(`SELECT IFNULL(equipped_frame,'') FROM users WHERE id=?`, userID).Scan(&ef); err == nil && ef != "" {
+		// 仍要擁有才有效（防欄位殘留已刪物品）
+		var n int
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM inventory_items WHERE user_id=? AND item_key=?`, userID, ef).Scan(&n); err == nil && n > 0 {
+			return ef
+		}
+	}
+	// fallback：舊邏輯（最貴的擁有框）
 	for _, key := range []string{"frame_rainbow", "frame_ink", "frame_imperial", "frame_violet", "frame_gold", "frame_cat"} {
 		var n int
 		if err := s.db.QueryRow(`SELECT COUNT(*) FROM inventory_items WHERE user_id = ? AND item_key = ?`, userID, key).Scan(&n); err == nil && n > 0 {

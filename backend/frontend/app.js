@@ -708,20 +708,44 @@ async function loadMarket() {
 async function loadExchange() {
   const data = await api('GET', '/api/exchange');
   setChips(data.chips);
+  // 裝飾品狀態（哪個已裝備）
+  let equippedFrame = '';
+  let ownedKeys = [];
+  try {
+    const cos = await api('GET', '/api/cosmetics');
+    equippedFrame = cos.equipped || '';
+    ownedKeys = (cos.owned || []).map(o => o.key);
+  } catch (e) {}
   const wrap = $('#exchange-list');
   wrap.innerHTML = '';
   for (const it of data.catalog) {
     const card = document.createElement('div');
     card.className = 'card';
+    const isFrame = (it.key || '').startsWith('frame_');
+    const owned = ownedKeys.includes(it.key);
+    const isOn = equippedFrame === it.key;
+    let extra = '';
+    if (isFrame && owned) {
+      extra = `<button class="btn ghost" data-equip="${it.key}" style="margin-top:6px;font-size:12px;padding:6px 14px">${isOn ? '脫下（回自動）' : '裝備這個框'}</button>`;
+    }
     card.innerHTML = `<h3 style="color:var(--gold);font-size:15px">${it.name}
-      <span class="badge">${it.kind === 'buff' ? '限時' : it.kind === 'cosmetic' ? '裝飾' : '消耗品'}</span></h3>
+      <span class="badge">${isOn ? '<b style="color:var(--green)">使用中</b>' : it.kind === 'buff' ? '限時' : it.kind === 'cosmetic' ? '裝飾' : '消耗品'}</span></h3>
       <p style="font-size:13px;color:var(--muted);margin:8px 0">${it.description}</p>
-      <button class="btn">${it.price ? fmt(it.price) + ' 喵喵幣' : '按石頭計價'}</button>`;
+      <button class="btn">${it.price ? fmt(it.price) + ' 喵喵幣' : '按石頭計價'}</button>${extra}`;
     card.querySelector('button').addEventListener('click', async () => {
       try {
         const res = await api('POST', '/api/exchange/buy', { key: it.key });
         if (res.payouts) toast(`刮到爽！十顆共 +${fmt(res.total)} 喵喵幣`);
-        else toast('已兌換');
+        else toast('已兌換' + (isFrame ? ' — 在卡上按「裝備」戴上' : ''));
+        refreshMe();
+        loadExchange();
+      } catch (e) { toast(e.message); }
+    });
+    const eqBtn = card.querySelector('[data-equip]');
+    if (eqBtn) eqBtn.addEventListener('click', async () => {
+      try {
+        const r2 = await api('POST', '/api/cosmetics/equip', { key: isOn ? '' : it.key });
+        toast(isOn ? '已脫下（回自動配框）' : '已裝備 ✓', true);
         refreshMe();
         loadExchange();
       } catch (e) { toast(e.message); }

@@ -223,7 +223,7 @@ func (s *Store) AIContributeTx(tx *Tx, userID int, amount int64) (int64, int64, 
 	// 我的計入基準 = min(我的累計, 目前 cap)（超歷史額時以 cap 為準）
 	cap := total * 20 / 100
 	if myAlready >= cap {
-		return 0, 0, fmt.Errorf("單人上限：池子 20%（目前 %s）—— 邀更多人捐，你的容許額會變大", shortNum(cap))
+		return 0, 0, fmt.Errorf("單人上限：池子 20%%（目前 %s）— 邀更多人捐，你的容許額會變大", shortNum(cap))
 	}
 	if myAlready+amount > cap {
 		return 0, 0, fmt.Errorf("超出單人上限：這次最多還能捐 %s（池子越大你能捐越多）", shortNum(cap-myAlready))
@@ -350,6 +350,12 @@ func (s *Store) AIView(userID int) (AIPoolView, error) {
 // AILockForce 管理員 / 守門員強制上鎖
 func (s *Store) AILockForce() error {
 	_, err := s.db.Exec(`UPDATE ai_pool SET unlocked=0, open_until='' WHERE id=1`)
+	return err
+}
+
+// SetEquippedFrame 設定頭像框裝備（key 空 = 自動）
+func (s *Store) SetEquippedFrame(userID int, key string) error {
+	_, err := s.db.Exec(`UPDATE users SET equipped_frame=? WHERE id=?`, key, userID)
 	return err
 }
 

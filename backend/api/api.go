@@ -121,6 +121,10 @@ func (a *API) Routes() *http.ServeMux {
 	mux.HandleFunc("POST /api/ai/pool/contribute", a.handler(a.aiPoolContribute))
 	mux.HandleFunc("POST /api/ai/pool/open", a.handler(a.aiPoolOpen))
 	mux.HandleFunc("POST /api/ai/pool/sync", a.handler(a.aiPoolSync))
+
+	// 裝飾品裝備（頭像框更換）
+	mux.HandleFunc("GET /api/cosmetics", a.handler(a.cosmeticsList))
+	mux.HandleFunc("POST /api/cosmetics/equip", a.handler(a.cosmeticsEquip))
 	return mux
 }
 

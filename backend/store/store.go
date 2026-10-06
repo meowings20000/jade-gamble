@@ -331,6 +331,11 @@ func (s *Store) migrate() error {
 		!strings.Contains(err.Error(), "duplicate column") {
 		return fmt.Errorf("migrate relief_at: %w", err)
 	}
+	// 頭像框自選裝備（2026-10-06）：空 = 自動用最貴的擁有框
+	if _, err := s.db.Exec(`ALTER TABLE users ADD COLUMN equipped_frame TEXT NOT NULL DEFAULT ''`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column") {
+		return fmt.Errorf("migrate equipped_frame: %w", err)
+	}
 
 	// 奪寶座位：玩家按「離開桌子」後就不要再顯示（歷史紀錄仍保留）
 	if _, err := s.db.Exec(`ALTER TABLE heist_seats ADD COLUMN left INTEGER NOT NULL DEFAULT 0`); err != nil &&
