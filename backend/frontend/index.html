@@ -279,9 +279,14 @@ body.mobile nav #classic-bet,body.mobile nav #yboss-bet{display:inline-flex !imp
       <div id="aipool-open-state" style="font-size:13px;margin-top:8px;color:var(--muted)"></div>
     </div>
     <div class="card" style="margin-top:16px">
-      <h3 style="color:var(--gold);margin-bottom:8px">捐獻名單</h3>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">每人計入上限是全池 20%（浮動）—— 別人捐越多，你能捐的也越多。名單顯示「計入額」：</p>
+      <h3 style="color:var(--gold);margin-bottom:8px">捐獻名單（本輪）</h3>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">每人上限是<b>門檻的 20%</b>（現在 <b>15 萬</b>）—— 至少 5 人出力才開得成車。本輪收市後歸零。</p>
       <div id="aipool-board" style="font-size:13px">載入中…</div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="color:var(--gold);margin-bottom:8px">🏛 捐款排行榜（一直以來）</h3>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">歷史總捐 —— 榮譽榜，不清零。</p>
+      <div id="aipool-hof" style="font-size:13px">載入中…</div>
     </div>
     <div class="card" style="margin-top:16px">
       <h3 style="color:var(--muted);margin-bottom:8px">門檻階梯（7 天額度剩餘 → 解鎖門檻）</h3>
@@ -341,6 +346,10 @@ body.mobile nav #classic-bet,body.mobile nav #yboss-bet{display:inline-flex !imp
         <input id="ad-all" type="number" placeholder="全服紅包金額">
         <button class="btn" id="ad-giveall">全服發紅包</button>
       </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="color:var(--gold);margin-bottom:8px">集中活動（全服 buff，開了立即生效）</h3>
+      <div id="ad-sevents" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px"></div>
     </div>
     <div class="card" style="margin-top:16px">
       <h3 style="color:var(--gold);margin-bottom:8px">發佈小活動</h3>

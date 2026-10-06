@@ -74,7 +74,7 @@ func TestCutRevealWithGemPath(t *testing.T) {
 	// 大量抽樣：有中彩蛋的賠付一定是寶石倍率，沒中的一定是 BaseValue
 	gotGem := false
 	for i := 0; i < 20000; i++ {
-		payout, gem := CutRevealWithGem(st, false, NewDetRand(uint64(i)+1))
+		payout, gem := CutRevealWithGem(st, false, NewDetRand(uint64(i)+1), 1.0)
 		if gem != nil {
 			gotGem = true
 			if payout != int(float64(st.Price)*gem.Mult) {

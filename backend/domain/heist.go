@@ -24,7 +24,7 @@ const (
 	HeistRounds     = 5  // 回合上限（用戶指定 5 輪）
 	HeistTargetBase = 18 // 進度目標：四人全合作 3 輪挖到，殺了人就要拖到最後
 	HeistKillTake   = 0.70
-	HeistPotMul     = 1.5
+	HeistPotMul     = 7.5 // 2026-10-06（user）：獎勵 ×5（原 1.5）；入場費不變
 	// HeistBotWaitSec: 沒真人時，等幾秒才自動補 bot（用戶指定 5 分鐘）
 	HeistBotWaitSec = 300
 	// 背叛三種結果（用戶指定）：60% 刺殺成功／20% 被反殺／20% 無事發生
@@ -154,10 +154,11 @@ func ResolveHeistRound(seats []HeistSeat, progress, target int, r Rand) HeistRou
 			continue
 		}
 		roll := HeistKillRoll(r) // 整數分桶：0-19 被反殺、20-39 無事、40-99 成功
-		if roll < 20 {
-			// 20% 被反殺：動手的人自己死，目標活著並拿走他 70% 入場費
-			res.Deaths[s.UserID] = victim.UserID
-			res.Exposed[s.UserID] = victim.UserID
+			if roll < 20 {
+				// 20% 被反殺：動手的人自己死，目標活著並拿走他 70% 入場費
+				// ★ killed_by 寫「-victim」＝反殺標記（死者是先動手的，victim 是自衛）— 前端 abs+顯示「反殺」
+				res.Deaths[s.UserID] = -victim.UserID
+				res.Exposed[s.UserID] = victim.UserID
 			res.Looters[victim.UserID] += int(float64(s.Entry) * HeistKillTake)
 			res.Misses = append(res.Misses, [2]int{s.UserID, victim.UserID})
 			res.Log = append(res.Log, fmt.Sprintf("%s 想殺 %s，反被對方做掉——%s 拿走他 70%% 入場費", s.Name, victim.Name, victim.Name))
@@ -199,4 +200,14 @@ func HeistPayout(grade ShopGrade, pot int, alive []int) map[int]int {
 
 // 入場費越高、難度越高（用戶指定）：每高一檔 +4 格進度、+1 回合上限。
 func HeistTargetFor(grade ShopGrade) int { return HeistTargetBase + 4*int(grade) }
-func HeistRoundsFor(grade ShopGrade) int { return HeistRounds + int(grade) }
+func HeistRoundsFor(grade ShopGrade) int {
+	// 2026-10-06 user：輪數 10~15（kg 10 / 表現 12～13 / 開窗 15）
+	switch grade {
+	case KiloGrade:
+		return 10
+	case FeatureGrade:
+		return 12
+	default:
+		return 15
+	}
+}

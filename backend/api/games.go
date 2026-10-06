@@ -157,8 +157,12 @@ func (a *API) polishAdvance(w http.ResponseWriter, r *http.Request) error {
 		"at_top":      ps.AtTopFor(st),
 	}
 	if !alive {
-		// 磨崩：石頭報廢，但救回當前倍率的 35%（2026-09-17：避免一次失手就血本無歸）
-		salvage := domain.PolishBrokenPayout(st, prog.Stage, st.BaseValue())
+		// 磨崩：石頭報廢，但救回一成（2026-09-17）；★活動 salvage_30 期間 30%
+		salvagePct := 0.0 // 0 → 用預設 10%
+		if a.Store.EventSalvage30() {
+			salvagePct = 0.30
+		}
+		salvage := domain.PolishBrokenPayout(st, prog.Stage, st.BaseValue(), salvagePct)
 		refund := 0
 		var bal int
 		if err := a.Store.WithTx(func(tx *store.Tx) error {

@@ -107,6 +107,7 @@ func (a *API) restockNPC(uid int) {
 		default:
 			grade = domain.WindowGrade
 		}
+		domain.RefreshSpecialStoneBoost()
 		st := domain.GenerateStone(grade, domain.RandSource)
 		st.State = domain.StateListed // NPC stock: listed, not owned
 		st.Origin = "market"          // 礦區直送
@@ -175,8 +176,11 @@ func (a *API) marketListStone(w http.ResponseWriter, r *http.Request) error {
 	if st.Origin == "classic" {
 		return errors.New("传统石不能挂卖")
 	}
-	// 5% listing fee (sink)
+	// 5% listing fee (sink)；★活動 market_fee_0 期間免費
 	fee := body.AskPrice / 20
+	if a.Store.EventMarketFree() {
+		fee = 0
+	}
 	if err := a.Store.WithTx(func(tx *store.Tx) error {
 		if _, err := store.UpdateChipsTx(tx, uid, -fee); err != nil {
 			return err

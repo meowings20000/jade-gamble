@@ -213,9 +213,13 @@ func (p *PolishState) CashPayout(st *Stone, baseValue int) int {
 	return int(float64(baseValue) * PolishMultiplier(st, p.Stage))
 }
 
-// PolishBrokenPayout: 磨崩當下能救回的金額（當前倍率 × 35%）。
-func PolishBrokenPayout(st *Stone, stage, baseValue int) int {
-	return int(float64(baseValue) * PolishMultiplier(st, stage) * PolishBreakSalvage)
+// PolishBrokenPayout: 磨崩當下能救回的金額（當前倍率 × salvage）。
+// ★ 集中活動 salvage_30：返還 10% → 30%（活動期）。salvagePct 由 store 傳入（活動開時 0.30）。
+func PolishBrokenPayout(st *Stone, stage, baseValue int, salvagePct float64) int {
+	if salvagePct <= 0 {
+		salvagePct = PolishBreakSalvage
+	}
+	return int(float64(baseValue) * PolishMultiplier(st, stage) * salvagePct)
 }
 
 // PolishForceName: 力度名稱。

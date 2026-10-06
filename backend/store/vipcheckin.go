@@ -38,6 +38,10 @@ func (s *Store) CheckinStatus(userID int, now time.Time) (checked bool, amount i
 	if vip {
 		amount = domain.VIPCheckinChips
 	}
+	// ★ 集中活動：簽到雙倍（checkin_x2）
+	if s.EventCheckinX2() {
+		amount *= 2
+	}
 	return cd == todayStr(now), amount, vip
 }
 

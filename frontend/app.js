@@ -1194,6 +1194,26 @@ async function loadAdmin() {
     try { await api('POST', '/api/admin/event/delete', { id: +b.dataset.evDel }); toast('已下架', true); loadAdmin(); loadEvents(); }
     catch (e) { toast(e.message); }
   });
+
+  // ★ 集中活動（server events）8 開關
+  try {
+    const se = await api('GET', '/api/admin/server-events');
+    $('#ad-sevents').innerHTML = (se.events || []).map((ev) => `
+      <div style="padding:8px;border:1px solid ${ev.active ? 'var(--green,var(--border))' : 'var(--border)'};border-radius:8px;background:var(--panel2)">
+        <div style="font-size:13px">${ev.active ? '🟢' : '⚪'} ${esc(ev.label)}</div>
+        <div style="font-size:11px;color:var(--muted);margin:2px 0 6px">${ev.active ? '生效中' + (ev.expires_at ? ' · 至 ' + ev.expires_at.slice(5, 16) : '') : '未開啟'}</div>
+        <button class="btn ${ev.active ? 'ghost' : ''}" style="padding:4px 10px;font-size:12px" data-sev="${esc(ev.key)}" data-sev-off="${ev.active ? 1 : 0}">
+          ${ev.active ? '關閉' : '開啟'}</button>
+      </div>`).join('');
+    document.querySelectorAll('[data-sev]').forEach((b) => b.onclick = async () => {
+      try {
+        const off = b.dataset.sevOff === '1';
+        await api('POST', '/api/admin/server-event', { key: b.dataset.sev, hours: off ? 0 : 24, off });
+        toast(off ? '活動已關閉' : '活動已開啟（24 小時）', true);
+        loadAdmin();
+      } catch (e) { toast(e.message); }
+    });
+  } catch (e) { /* 非管理員 */ }
 }
 
 async function adminAct(path, body, okMsg) {
@@ -1375,14 +1395,27 @@ async function loadAIPool(silent) {
     if (!list.length) board.innerHTML = '<span style="color:var(--muted)">還沒有人捐 — 上榜就在上面按下捐贈！</span>';
     else {
       board.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
-        '<tr style="color:var(--muted)"><td style="padding:3px 6px">#</td><td>玩家</td><td style="text-align:right">捐額</td><td style="text-align:right">佔比</td></tr>' +
+        '<tr style="color:var(--muted)"><td style="padding:3px 6px">#</td><td>玩家</td><td style="text-align:right">本輪捐</td><td style="text-align:right">距上限</td></tr>' +
         list.map((r, i) => `<tr>
           <td style="padding:4px 6px;border-bottom:1px solid var(--border);color:var(--muted)">${i + 1}</td>
           <td style="padding:4px 6px;border-bottom:1px solid var(--border)">${String(r.username).replace(/</g, '&lt;')}</td>
-          <td style="padding:4px 6px;border-bottom:1px solid var(--border);text-align:right"><b>${fmt(r.amount)}</b></td>
-          <td style="padding:4px 6px;border-bottom:1px solid var(--border);text-align:right">${(r.pct || 0).toFixed(1)}%</td>
+          <td style="padding:4px 6px;border-bottom:1px solid var(--border);text-align:right"><b>${fmt(r.round_amount || 0)}</b></td>
+          <td style="padding:4px 6px;border-bottom:1px solid var(--border);text-align:right">${fmt(Math.max(0, Math.round((p.threshold || 0) * 0.2) - (r.round_amount || 0)))} 可捐</td>
         </tr>`).join('') + '</table>';
     }
+  }
+  // ★ 捐款排行榜（一直以來 — 歷史總捐）
+  const hof = document.getElementById('aipool-hof');
+  if (hof) {
+    const list2 = (d.board || []).filter(x => (x.amount || 0) > 0).sort((a, b) => b.amount - a.amount);
+    hof.innerHTML = list2.length
+      ? '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+        list2.slice(0, 10).map((r, i) => `<tr>
+          <td style="padding:4px 6px;border-bottom:1px solid var(--border);color:var(--muted)">${['🥇','🥈','🥉'][i] || (i + 1)}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid var(--border)">${String(r.username).replace(/</g, '&lt;')}</td>
+          <td style="padding:4px 6px;border-bottom:1px solid var(--border);text-align:right"><b>${fmt(r.amount || 0)}</b></td>
+        </tr>`).join('') + '</table>'
+      : '<span style="color:var(--muted)">功德簿是空的一頁</span>';
   }
   const btn = document.getElementById('aipool-btn');
   // ★ 自動刷新（60 秒）：站著不動也看到最新額度/池子（只在頁面 active 時）
@@ -1401,6 +1434,7 @@ async function loadAIPool(silent) {
         const r = await api('POST', '/api/ai/pool/contribute', { amount: amt });
         toast('已捐入 ' + fmt(amt) + ' 喵喵幣 🐱', true);
         if (typeof r.chips === 'number') setChips(r.chips);
+        clawdEggPopup(amt);
         // clawd 丟幣動畫（1.2 秒後回正常）
         const m = document.getElementById('aipool-mascot');
         if (m && typeof clawdCoin === 'function') {
@@ -1423,15 +1457,16 @@ async function loadAIPool(silent) {
         qb.dataset.hooked = '1';
         qb.addEventListener('click', async () => {
           qb.disabled = true;
-          try {
-            const q2 = await api('GET', '/api/ai/pool/quick20');
-            const r = await api('POST', '/api/ai/pool/contribute', { amount: q2.can });
-            toast(`已捐入 ${fmt(q2.can)}（池子的 20%）🐱`, true);
-            if (typeof r.chips === 'number') setChips(r.chips);
-            const m = document.getElementById('aipool-mascot');
-            if (m && typeof clawdCoin === 'function') m.innerHTML = clawdCoin();
-            setTimeout(() => loadAIPool(), 1200);
-          } catch (e) { toast(e.message || '捐贈失敗'); qb.disabled = false; }
+            try {
+              const q2 = await api('GET', '/api/ai/pool/quick20');
+              const r = await api('POST', '/api/ai/pool/contribute', { amount: q2.can });
+              toast(`已捐入 ${fmt(q2.can)}（池子的 20%）🐱`, true);
+              if (typeof r.chips === 'number') setChips(r.chips);
+              clawdEggPopup(q2.can);
+              const m = document.getElementById('aipool-mascot');
+              if (m && typeof clawdCoin === 'function') m.innerHTML = clawdCoin();
+              setTimeout(() => loadAIPool(), 1200);
+            } catch (e) { toast(e.message || '捐贈失敗'); qb.disabled = false; }
         });
       }
     } catch (e) { q20.style.display = 'none'; }

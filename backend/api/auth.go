@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,6 +16,7 @@ import (
 // discordCallback exchanges ?code for a Discord user, upserts, sets session.
 // loginFail: 登入失敗一律導回登入頁並帶原因，不要丟使用者一個 400 空白頁。
 func (a *API) loginFail(w http.ResponseWriter, r *http.Request, code string) error {
+	log.Printf("discord oauth failed: stage=%s remote=%s ua=%q", code, r.RemoteAddr, r.UserAgent())
 	http.Redirect(w, r, "/?login_error="+code, http.StatusFound)
 	return nil
 }

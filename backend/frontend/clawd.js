@@ -303,3 +303,19 @@ function clawdMount(p) {
       background:var(--panel2,var(--card));border:1px solid var(--gold,var(--border));border-radius:10px;padding:6px 8px;
       font-size:12px;color:var(--text,var(--foreground));box-shadow:0 4px 14px rgba(0,0,0,.25);z-index:5;line-height:1.5"></div>`;
 }
+
+// 🎁 神秘彩蛋 popup（不在任何說明文字出現）：本輪個人累計捐過「門檻 10%」→ 捐贈當下彈一次
+function clawdEggPopup(justDonated) {
+  const p = window.__aipoolState;
+  if (!p || !p.threshold || p.threshold >= 4503599627370496) return;
+  const line = p.threshold * 0.10;
+  const mine = (p.my_contrib || 0) + (justDonated || 0); // my_contrib 是本輪（後端已改 round）
+  if (mine >= line && !window.__clawdEggShown) {
+    window.__clawdEggShown = true;
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;top:74px;right:18px;background:linear-gradient(135deg,#2a2415,#3a3018);border:1px solid var(--gold);color:var(--gold);padding:12px 18px;border-radius:12px;z-index:400;font-size:13.5px;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:clawdPop .3s ease-out;max-width:280px';
+    el.textContent = '🎁 clawd 對你悄悄話：「你好像做了件好事…收市的時候，可能會有驚喜喵。」';
+    document.body.appendChild(el);
+    setTimeout(() => { el.style.transition = 'opacity .5s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 500); }, 5000);
+  }
+}

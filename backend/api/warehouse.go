@@ -111,7 +111,11 @@ func (a *API) cut(w http.ResponseWriter, r *http.Request) error {
 			useCoupon = ok // if not held, proceed without coupon
 		}
 		var gem *domain.Gem
-		payout, gem = domain.CutRevealWithGem(st, useCoupon, domain.RandSource)
+		gemBoost := 1.0
+		if a.Store.EventPolishLuck() {
+			gemBoost = 2.0
+		}
+		payout, gem = domain.CutRevealWithGem(st, useCoupon, domain.RandSource, gemBoost)
 		cutGem = gem
 
 		// discovery + collection score

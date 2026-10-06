@@ -152,10 +152,15 @@ func (s *Store) ApplyHeistRoundTx(tx *sql.Tx, heistID, progress, round int, res 
 		return err
 	}
 	for uid, killer := range res.Deaths {
+		// 負數 = 反殺標記（死者先動手）；錢照給自衛者（abs）
+		abs := killer
+		if abs < 0 {
+			abs = -abs
+		}
 		if _, err := tx.Exec(`UPDATE heist_seats SET alive=0, killed_by=? WHERE heist_id=? AND user_id=?`, killer, heistID, uid); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`UPDATE users SET chips = chips + ? WHERE id=?`, res.Looters[killer], killer); err != nil {
+		if _, err := tx.Exec(`UPDATE users SET chips = chips + ? WHERE id=?`, res.Looters[abs], abs); err != nil {
 			return err
 		}
 	}

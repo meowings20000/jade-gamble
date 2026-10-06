@@ -23,9 +23,9 @@ func (a *API) aiPoolView(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	board, err := a.Store.AIContribList(20)
-	if err != nil {
-		board = []map[string]any{}
+	board, berr := a.Store.AIContribList(20)
+	if berr != nil {
+		board = []map[string]any{{"_err": berr.Error()}}
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "pool": v, "board": board})
 	return nil
@@ -119,4 +119,22 @@ func (a *API) aiPoolSync(w http.ResponseWriter, r *http.Request) error {
 		"ok": true, "pool": view, "unlock": unlock, "lock": lock,
 	})
 	return nil
+}
+
+// aiPoolDebug: GET /api/ai/_debug（暫時）
+func (a *API) aiPoolDebug(w http.ResponseWriter, r *http.Request) error {
+	contrib, err1 := a.Store.DebugAIContrib()
+	board, err2 := a.Store.AIContribList(20)
+	writeJSON(w, 200, map[string]any{
+		"ok": true, "contrib_4col": contrib, "board_5col_join": board,
+		"err1": fmtErr(err1), "err2": fmtErr(err2),
+	})
+	return nil
+}
+
+func fmtErr(e error) string {
+	if e == nil {
+		return ""
+	}
+	return e.Error()
 }

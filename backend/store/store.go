@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -16,7 +17,9 @@ import (
 
 // Store wraps the SQLite database.
 type Store struct {
-	db *sql.DB
+	db      *sql.DB
+	eventMu sync.RWMutex
+	events  map[string]time.Time
 }
 
 func Open(path string) (*Store, error) {
@@ -25,8 +28,11 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1) // sqlite: single writer
-	s := &Store{db: db}
+	s := &Store{db: db, events: make(map[string]time.Time)}
 	if err := s.migrate(); err != nil {
+		return nil, err
+	}
+	if err := s.loadServerEventCache(); err != nil {
 		return nil, err
 	}
 	if err := s.AIPoolEnsure(); err != nil {
@@ -281,6 +287,13 @@ func (s *Store) migrate() error {
 			status TEXT NOT NULL DEFAULT 'pending',
 			created_at TEXT NOT NULL DEFAULT (datetime('now')),
 			resolved_at TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE TABLE IF NOT EXISTS server_events (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			key TEXT NOT NULL UNIQUE,
+			expires_at TEXT NOT NULL,
+			admin_id INTEGER NOT NULL DEFAULT 0,
+			created_at TEXT NOT NULL DEFAULT (datetime('now'))
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_transfers_to ON transfers(to_id, status)`,
 		`CREATE INDEX IF NOT EXISTS idx_transfers_from ON transfers(from_id, status)`,

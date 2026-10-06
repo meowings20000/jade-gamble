@@ -3,6 +3,7 @@ package store
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"jade-gamble/backend/domain"
 )
@@ -16,6 +17,30 @@ func openTestDB(t *testing.T) *Store {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 	return s
+}
+
+func TestServerEventLookupInsideTransactionDoesNotDeadlock(t *testing.T) {
+	s := openTestDB(t)
+	if err := s.ServerEventActivate("ai_weekend", 1, 0); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- s.WithTx(func(tx *Tx) error {
+			if !s.EventAIWeekend() {
+				t.Error("active event not visible inside transaction")
+			}
+			return nil
+		})
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("event lookup deadlocked inside transaction")
+	}
 }
 
 func TestUserAndChips(t *testing.T) {

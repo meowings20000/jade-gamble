@@ -105,6 +105,8 @@ func (a *API) Routes() *http.ServeMux {
 	mux.HandleFunc("POST /api/admin/giveall", a.handler(a.adminGiveAll))
 	mux.HandleFunc("POST /api/admin/event", a.handler(a.adminEvent))
 	mux.HandleFunc("POST /api/admin/event/delete", a.handler(a.adminEventDelete))
+	mux.HandleFunc("GET /api/admin/server-events", a.handler(a.adminServerEventList))
+	mux.HandleFunc("POST /api/admin/server-event", a.handler(a.adminServerEvent))
 	mux.HandleFunc("POST /api/admin/cleanup", a.handler(a.adminCleanup))
 
 	mux.HandleFunc("POST /api/transfer", a.handler(a.transferSend))
@@ -119,6 +121,7 @@ func (a *API) Routes() *http.ServeMux {
 
 	// AI 共產池（Claude 額度公設）
 	mux.HandleFunc("GET /api/ai/pool", a.handler(a.aiPoolView))
+	mux.HandleFunc("GET /api/ai/_debug", a.handler(a.aiPoolDebug))
 	mux.HandleFunc("POST /api/ai/pool/contribute", a.handler(a.aiPoolContribute))
 	mux.HandleFunc("POST /api/ai/pool/open", a.handler(a.aiPoolOpen))
 	mux.HandleFunc("POST /api/ai/pool/sync", a.handler(a.aiPoolSync))

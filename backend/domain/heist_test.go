@@ -131,11 +131,11 @@ func TestHeistRingWipeout(t *testing.T) {
 func TestHeistPayout(t *testing.T) {
 	for _, g := range []ShopGrade{KiloGrade, FeatureGrade, WindowGrade} {
 		pot := HeistPot(g)
-		if pot != HeistEntry(g)*6 {
-			t.Errorf("grade %d 獎池應該 6× 入場費 %d，得到 %d", g, HeistEntry(g)*6, pot)
+		if pot != HeistEntry(g)*30 {
+			t.Errorf("grade %d 獎池應該 30× 入場費 %d（×5 後），得到 %d", g, HeistEntry(g)*30, pot)
 		}
 		p4 := HeistPayout(g, pot, []int{1, 2, 3, 4})
-		if p4[1] != HeistEntry(g)*3/2 {
+		if p4[1] != HeistEntry(g)*15/2 {
 			t.Errorf("四人平分應該各 1.5× 入場費 %d，得到 %d", HeistEntry(g)*3/2, p4[1])
 		}
 		p1 := HeistPayout(g, pot, []int{2})

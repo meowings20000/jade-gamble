@@ -254,7 +254,35 @@ func (a *API) events(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	writeJSON(w, 200, map[string]any{"events": events})
+	// ★ 集中活動也進橫幅（玩家看得到「現在有什麼 buff」）
+	ses, _ := a.Store.ServerEventList()
+	seLabels := map[string]string{
+		"polish_luck":   "💎 切石爽感：彩蛋機率 ×2",
+		"salvage_30":    "🛡 磨崩返還 30%",
+		"market_fee_0":  "🏷 貨架上架免費（免 5%）",
+		"checkin_x2":    "💰 簽到雙倍日",
+		"race_prize":    "🏆 排行榜獎金 ×2",
+		"special_stone": "🌈 限定石頭機率提升",
+		"heist_bonus":   "💰 奪寶獎池再加 50%",
+		"ai_weekend":    "🤖 AI 開市門檻半價",
+	}
+	evList := make([]map[string]any, 0, len(events)+len(ses))
+	for _, e := range events {
+		evList = append(evList, map[string]any{
+			"id": e.ID, "title": e.Title, "body": e.Body, "hours_left": e.HoursLeft,
+		})
+	}
+	for _, se := range ses {
+		lab, ok := seLabels[se.Key]
+		if !ok {
+			continue
+		}
+		evList = append(evList, map[string]any{
+			"id": 0, "title": "🎉 集中活動：" + lab, "body": "", "hours_left": 0,
+			"server_event": true,
+		})
+	}
+	writeJSON(w, 200, map[string]any{"events": evList})
 	return nil
 }
 

@@ -458,7 +458,9 @@ func (a *API) resolveHeistRound(h *store.Heist) error {
 			alive = append(alive, s.UserID)
 		}
 	}
-	done := res.Collapse || res.Progress >= h.Target || len(alive) <= 1 || round >= domain.HeistRoundsFor(domain.ShopGrade(h.Grade))
+	// ★ 完場條件（2026-10-06 user 修正）：剩 1 人 + 進度未滿 ≠ 完場 —— 他一個人可以繼續挖到挖到/輪數用完
+	//   完場只有：崩塌／全滅／挖到目標／輪數用完
+	done := res.Collapse || len(alive) == 0 || res.Progress >= h.Target || round >= domain.HeistRoundsFor(domain.ShopGrade(h.Grade))
 	if !done {
 		return nil
 	}
@@ -472,6 +474,12 @@ func (a *API) resolveHeistRound(h *store.Heist) error {
 		payout = domain.HeistPayout(domain.ShopGrade(h.Grade), h.Pot, alive)
 	default: // 5 輪用完還沒挖到：入場費沒收
 		payout = map[int]int{}
+	}
+	// ★ 集中活動 heist_bonus：獎池再 ×1.5
+	if len(payout) > 0 && a.Store.EventHeistBoost() {
+		for uid2, amt := range payout {
+			payout[uid2] = amt * 3 / 2
+		}
 	}
 	return a.Store.WithTx(func(tx *store.Tx) error {
 		// 獎池按進度折算（用戶 2026-09-16 定案）：沒挖到就拿不到滿額。

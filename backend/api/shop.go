@@ -49,7 +49,8 @@ func (a *API) shopView(w http.ResponseWriter, r *http.Request) error {
 		// 以前這裡是「看到空格就補」，等於買走一格、跳個頁就免費多一顆。
 		if newDay && len(ids) < domain.ShelfSize(g) {
 			for len(ids) < domain.ShelfSize(g) {
-				st := domain.GenerateStone(g, domain.RandSource)
+				domain.RefreshSpecialStoneBoost()
+		st := domain.GenerateStone(g, domain.RandSource)
 				st.OwnerID = uid
 				st.State = domain.StateShop
 				if err := a.Store.SaveStone(st); err != nil {
@@ -158,7 +159,8 @@ func (a *API) shopRefresh(w http.ResponseWriter, r *http.Request) error {
 				return err
 			}
 			for i := 0; i < domain.ShelfSize(g); i++ {
-				st := domain.GenerateStone(g, domain.RandSource)
+				domain.RefreshSpecialStoneBoost()
+		st := domain.GenerateStone(g, domain.RandSource)
 				st.OwnerID = uid
 				st.State = domain.StateShop
 				if err := a.Store.SaveStoneTx(tx, st); err != nil {
@@ -187,7 +189,8 @@ func (a *API) shopRefresh(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 		for i := 0; i < domain.ShelfSize(g); i++ {
-			st := domain.GenerateStone(g, domain.RandSource)
+			domain.RefreshSpecialStoneBoost()
+		st := domain.GenerateStone(g, domain.RandSource)
 			st.OwnerID = uid
 			st.State = domain.StateShop
 			if err := a.Store.SaveStoneTx(tx, st); err != nil {
@@ -252,7 +255,8 @@ func (a *API) shopBuy(w http.ResponseWriter, r *http.Request) error {
 				return err
 			}
 			for i := 0; i < domain.ShelfSize(g); i++ {
-				st2 := domain.GenerateStone(g, domain.RandSource)
+				domain.RefreshSpecialStoneBoost()
+			st2 := domain.GenerateStone(g, domain.RandSource)
 				st2.OwnerID = uid
 				st2.State = domain.StateShop
 				if err := a.Store.SaveStoneTx(tx, st2); err != nil {

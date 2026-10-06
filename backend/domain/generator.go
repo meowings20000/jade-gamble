@@ -133,8 +133,13 @@ func rollVarietyName(r Rand) string { _ = r; return "" }
 func rollColorVariety(r Rand) ColorVariety {
 	p := r.Float64()
 	acc := 0.0
+	// ★ 集中活動 special_stone：稀有品種機率 ×3（活動期）
+	probMult := 1.0
+	if specialStoneBoost {
+		probMult = 3.0
+	}
 	for _, v := range []ColorVariety{Violet, BlueWater, WhiteGreen, FloatingBlue, InkGreen, YellowGreen, SpringPurple, FortuneThree, ImperialGreen} {
-		acc += varietyProb[v]
+		acc += varietyProb[v] * probMult
 		if p < acc {
 			return v
 		}
@@ -342,4 +347,14 @@ func newStoneID(r Rand) string {
 		b[i] = hexdigits[r.Intn(16)]
 	}
 	return "S" + string(b)
+}
+
+// SpecialStoneBoostHook: 集中活動 special_stone 期間由 store 生效點呼叫（避免 domain→store 依賴）。
+var SpecialStoneBoostHook = func() bool { return false }
+
+var specialStoneBoost = false
+
+// RefreshSpecialStoneBoost: 每次生成石頭前呼叫（便宜：一次 hook 判斷）。
+func RefreshSpecialStoneBoost() {
+	specialStoneBoost = SpecialStoneBoostHook()
 }

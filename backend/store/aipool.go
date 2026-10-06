@@ -44,23 +44,36 @@ type AIPoolView struct {
 // （正式階梯之後再調回；AIFloorLockPct = 15% 底線鎖死）
 const AIFloorLockPct = 15.0
 
-// 單人捐贈上限（浮動）：每人累計 ≤ 全池總捐的 20%（別人捐多你也能捐多）
+// 單人捐贈上限（浮動）：每人累計 ≤ 本輪池的 5%（2026-10-06 第二版：20% → 5%）
 func aiThreshold(sevenDayUtil float64) int64 {
 	remain := 100.0 - sevenDayUtil
+	var th int64
 	switch {
 	case remain < AIFloorLockPct:
-		return 1 << 62 // 底線鎖死：實際上達不到
+		th = 1 << 62 // 底線鎖死：實際上達不到
 	case remain < 25:
-		return 2_000_000
+		th = 2_000_000
 	case remain < 40:
-		return 1_500_000
+		th = 1_500_000
 	case remain < 60:
-		return 1_000_000
+		th = 1_000_000
 	case remain < 80:
-		return 750_000
+		th = 750_000
 	default:
-		return 500_000
+		th = 500_000
 	}
+	return th
+}
+
+// aiThresholdWithEvents: 門檻（含集中活動 ai_weekend 半價）
+func (s *Store) aiThresholdWithEvents(sevenDayUtil float64) int64 {
+	th := aiThreshold(sevenDayUtil)
+	if th < (1 << 62) { // 鎖死狀態不半價
+		if s.EventAIWeekend() {
+			th /= 2
+		}
+	}
+	return th
 }
 
 // AIPoolEnsure 建表
@@ -107,7 +120,7 @@ func (s *Store) AIPoolEnsure() error {
 }
 
 // aiEffectivePool 計入單人浮動上限後的「有效池子」：
-// ★ 規則（user 2026-10-06 定）：每人累計 ≤ 全池總捐的 20%（浮動）
+// ★ 規則（2026-10-06 v2）：每人累計 ≤ 本輪池的 5%（浮動）
 //
 //	別人捐越多、每人的容許額越大；防止一人獨扛全服。
 //	解鎖判定用「有效池」：單人超額的部分不計入（錢已收，只是判定時不算）。
@@ -120,7 +133,7 @@ func (s *Store) aiEffectivePool(threshold int64) (int64, error) {
 	if total == 0 {
 		return 0, nil
 	}
-	cap := total * 20 / 100 // 浮動：全池的 20%
+	cap := total * 5 / 100 // 浮動：本輪池的 5%
 	rows, err := s.db.Query(`SELECT total FROM ai_contrib`)
 	if err != nil {
 		return 0, err
@@ -172,7 +185,7 @@ func (s *Store) AIMarketOpen(userID int, now time.Time) (AIPoolView, error) {
 	if err != nil {
 		return AIPoolView{}, err
 	}
-	th := aiThreshold(u7)
+	th := s.aiThresholdWithEvents(u7)
 	floor := (100.0 - u7) < AIFloorLockPct
 	fiveHourWall := u5 >= 90.0
 	effPool, e := s.aiEffectivePool(th)
@@ -213,17 +226,16 @@ func (s *Store) AIContributeTx(tx *Tx, userID int, amount int64) (int64, int64, 
 	if amount <= 0 {
 		return 0, 0, ErrInsufficient
 	}
-	// ★ 浮動 cap（2026-10-06 修）：cap = max(本輪池 × 20%, 起跳額 10 萬)
-	// 一律算「本輪」（round_total）—— 收市歸零後人人重新開始
-	var roundAll, myRound int64
-	_ = tx.QueryRow(`SELECT COALESCE(SUM(round_total),0) FROM ai_contrib`).Scan(&roundAll)
+	// ★ 捐獻 cap（2026-10-06 重做）：每人 ≤ 當前門檻的 20%
+	//   門檻 75 萬 → 單人上限 15 萬 → 最少 5 人開車；門檻升 → 上限跟著升、永遠 5 人開車
+	var myRound int64
 	_ = tx.QueryRow(`SELECT IFNULL(SUM(round_total),0) FROM ai_contrib WHERE user_id=?`, userID).Scan(&myRound)
-	cap := roundAll * 20 / 100
-	if cap < AIJumpStart {
-		cap = AIJumpStart
-	}
+	var u7c float64
+	_ = tx.QueryRow(`SELECT seven_day_util FROM ai_pool WHERE id=1`).Scan(&u7c)
+	th := s.aiThresholdWithEvents(u7c)
+	cap := th * 20 / 100
 	if myRound >= cap {
-		return 0, 0, fmt.Errorf("單人上限：本輪 %s（池 %s — 越多人捐你能捐越多）", shortNum(cap), shortNum(roundAll))
+		return 0, 0, fmt.Errorf("單人上限：門檻的 20%%（%s）— 至少 5 人開車", shortNum(cap))
 	}
 	if myRound+amount > cap {
 		return 0, 0, fmt.Errorf("超出單人上限：這次最多還能捐 %s", shortNum(cap-myRound))
@@ -286,7 +298,7 @@ func (s *Store) AISync(snap AIUsageSnapshot, now time.Time) (view AIPoolView, un
 	if e != nil {
 		return view, false, false, e
 	}
-	th := aiThreshold(u7)
+	th := s.aiThresholdWithEvents(u7)
 	floor := (100.0 - u7) < AIFloorLockPct
 	// 5h 撞牆（>=90%）不再收市（開市中不能關）—— 只留給前端顯示狀態
 	_ = u5
@@ -307,7 +319,7 @@ func (s *Store) AISync(snap AIUsageSnapshot, now time.Time) (view AIPoolView, un
 		if _, e := s.db.Exec(`UPDATE ai_pool SET unlocked=0, open_until='' WHERE id=1`); e != nil {
 			return view, false, false, e
 		}
-		if e := s.AIRoundReset(); e != nil {
+		if e := s.AIRoundReset(true); e != nil { // 開市後收市 → 有彩蛋返還
 			return view, false, false, e
 		}
 		unlocked = false
@@ -334,7 +346,7 @@ func (s *Store) AIView(userID int) (AIPoolView, error) {
 	if userID > 0 {
 		_ = s.db.QueryRow(`SELECT total FROM ai_contrib WHERE user_id=?`, userID).Scan(&my)
 	}
-	th := aiThreshold(u7)
+	th := s.aiThresholdWithEvents(u7)
 	floor := (100.0 - u7) < AIFloorLockPct
 	// AIView 回真實餘額（rawPool）；開市中 rawPool=0 正確呈現「已燒掉」
 	_ = th
@@ -385,7 +397,7 @@ func (s *Store) AIContribList(limit int) ([]map[string]any, error) {
 	_ = s.db.QueryRow(`SELECT COALESCE(SUM(round_total),0) FROM ai_contrib`).Scan(&roundTotal)
 	rows, err := s.db.Query(`SELECT a.user_id, u.username, a.total, a.round_total, a.last_at
 		FROM ai_contrib a LEFT JOIN users u ON u.id=a.user_id
-		ORDER BY a.total DESC LIMIT ?`, limit)
+		ORDER BY a.round_total DESC, a.total DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -393,11 +405,15 @@ func (s *Store) AIContribList(limit int) ([]map[string]any, error) {
 	out := []map[string]any{}
 	for rows.Next() {
 		var uid int64
-		var name string
+		var name *string // NULL 安全（帳號被清時）
 		var lastAt string
 		var amt, roundAmt int64
 		if err := rows.Scan(&uid, &name, &amt, &roundAmt, &lastAt); err != nil {
 			return nil, err
+		}
+		n := "神秘玩家"
+		if name != nil {
+			n = *name
 		}
 		pct := 0.0
 		if total > 0 {
@@ -407,11 +423,10 @@ func (s *Store) AIContribList(limit int) ([]map[string]any, error) {
 		if roundTotal > 0 {
 			roundPct = float64(roundAmt) / float64(roundTotal) * 100
 		}
-		if name == "" {
-			name = "神秘玩家"
-		}
+		_ = pct
+		_ = roundPct
 		out = append(out, map[string]any{
-			"user_id": uid, "username": name, "amount": amt, "round_amount": roundAmt,
+			"user_id": uid, "username": n, "amount": amt, "round_amount": roundAmt,
 			"pct": pct, "round_pct": roundPct, "last_at": lastAt,
 		})
 	}
@@ -419,7 +434,23 @@ func (s *Store) AIContribList(limit int) ([]map[string]any, error) {
 }
 
 // AIRoundReset 收市時：本輪捐贈歸零（總捐保留）
-func (s *Store) AIRoundReset() error {
+// ★ 彩蛋（user 2026-10-06）：開市成功收市時，本輪個人捐額 ≥ 門檻 10% 的玩家返還一半
+func (s *Store) AIRoundReset(unlocked bool) error {
+	if unlocked {
+		// 開市成功（大家玩到了）→ 捐 >= 門檻10% 的人返還一半
+		var u7 float64
+		_ = s.db.QueryRow(`SELECT seven_day_util FROM ai_pool WHERE id=1`).Scan(&u7)
+		th := s.aiThresholdWithEvents(u7)
+		bonusLine := th * 10 / 100
+		_, err := s.db.Exec(`UPDATE users SET chips = chips + (
+			SELECT round_total/2 FROM ai_contrib a WHERE a.user_id = users.id AND a.round_total >= ?
+		) WHERE EXISTS (
+			SELECT 1 FROM ai_contrib b WHERE b.user_id = users.id AND b.round_total >= ?
+		)`, bonusLine, bonusLine)
+		if err != nil {
+			return err
+		}
+	}
 	_, err := s.db.Exec(`UPDATE ai_contrib SET round_total=0`)
 	return err
 }
@@ -436,16 +467,14 @@ type Quick20 struct {
 const AIJumpStart = 100000
 
 func (s *Store) Quick20(userID int) Quick20 {
-	// ★ cap = max(本輪池 × 20%, 起跳額 10 萬)（user 2026-10-06 定案）
-	//   池空/小池 → 10 萬起跳（解死鎖）；池大 → 20% 接管（防壟斷）
-	var roundAll, myRound, chips int64
-	_ = s.db.QueryRow(`SELECT COALESCE(SUM(round_total),0) FROM ai_contrib`).Scan(&roundAll)
+	// ★ cap = 門檻的 20%（2026-10-06 重做；跟 contribute 同一公式）
+	//   門檻 75 萬 → 單人上限 15 萬 → 至少 5 人開車
+	var myRound, chips int64
+	var u7 float64
 	_ = s.db.QueryRow(`SELECT IFNULL(SUM(round_total),0) FROM ai_contrib WHERE user_id=?`, userID).Scan(&myRound)
 	_ = s.db.QueryRow(`SELECT chips FROM users WHERE id=?`, userID).Scan(&chips)
-	target := roundAll * 20 / 100
-	if target < AIJumpStart {
-		target = AIJumpStart
-	}
+	_ = s.db.QueryRow(`SELECT seven_day_util FROM ai_pool WHERE id=1`).Scan(&u7)
+	target := s.aiThresholdWithEvents(u7) * 20 / 100
 	can := target - myRound
 	if can < 0 {
 		can = 0
@@ -454,4 +483,23 @@ func (s *Store) Quick20(userID int) Quick20 {
 		can = chips
 	}
 	return Quick20{Target: target, My: myRound, Can: can, Chips: chips}
+}
+
+// DebugAIContrib 診斷端點用的原始資料（暫時）
+func (s *Store) DebugAIContrib() ([]map[string]any, error) {
+	rows, err := s.db.Query(`SELECT user_id, total, round_total, last_at FROM ai_contrib ORDER BY total DESC LIMIT 20`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []map[string]any{}
+	for rows.Next() {
+		var uid, t, rt int64
+		var la string
+		if err := rows.Scan(&uid, &t, &rt, &la); err != nil {
+			return nil, err
+		}
+		out = append(out, map[string]any{"user_id": uid, "total": t, "round": rt, "last": la})
+	}
+	return out, rows.Err()
 }

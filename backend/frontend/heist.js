@@ -78,6 +78,13 @@ function renderHeist(d) {
   }
   const me = d.me || {};
   const others = d.others || [];
+
+// 凶手名字查表（me + others 都可能是凶手）
+function heistKillerName(killerID, me, others) {
+  if (me.user_id === killerID) return me.name;
+  const o = (others || []).find(x => x.user_id === killerID);
+  return o ? o.name : '';
+}
   const done = h.status === 'done';
   const alive = others.filter((o) => o.alive).length + (me.alive ? 1 : 0);
   const log = (d.history || []).slice(0, 5);
@@ -99,12 +106,17 @@ function renderHeist(d) {
       ${heistBar(h.progress, h.target)}
       ${endText ? `<div style="margin-top:10px;padding:10px;border-radius:8px;background:var(--panel2);border:1px solid var(--line)">${endText}</div>` : ''}
       <div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">
-        ${[{ user_id: me.user_id, name: me.name, alive: me.alive, payout: me.payout, tried: me.tried_to_kill_me, mine: true }, ...others.map(o => ({ ...o, mine: false }))]
+        ${[{ user_id: me.user_id, name: me.name, alive: me.alive, payout: me.payout, tried: me.tried_to_kill_me, killed_by: me.killed_by, mine: true }, ...others.map(o => ({ ...o, mine: false }))]
       .map((s) => `
           <div class="seat" style="padding:8px;border-radius:8px;border:1px solid ${s.mine ? 'var(--gold)' : 'var(--line)'};background:var(--panel2);${s.alive ? '' : 'opacity:.5'}">
             <div style="font-size:13px">${s.alive ? '🪨' : '☠️'} ${esc(s.name)}${s.mine ? '（你）' : ''}</div>
             ${s.payout > 0 ? `<div style="font-size:12px;color:var(--gold)">分到 ${fmt(s.payout)}</div>` : ''}
-            ${s.tried ? `<div style="font-size:12px;color:#e06c6c">⚠ ${heistHunters(h).join('、') || '有人'} 想殺你（已曝光）</div>` : ''}
+            ${s.killed_by ? (() => { const kb = Math.abs(s.killed_by); const nm = heistKillerName(kb, me, others);
+              return s.killed_by < 0
+                ? `<div style="font-size:12px;color:#e09c6c">🛡 反殺了 ${esc(nm || '?')}（他先出手殺你，被你做掉）</div>`
+                : `<div style="font-size:12px;color:#e06c6c">🔪 被殺了${nm ? '（凶手：' + esc(nm) + '）' : ''}</div>`;
+            })() : ''}
+            ${s.tried ? `<div style="font-size:12px;color:#e06c6c">⚠ ${heistKillerName(s.tried, me, others) || heistHunters(h).join('、') || '有人'} 想殺你（已曝光）</div>` : ''}
             ${!s.mine && s.alive && !done ? `<div style="margin-top:4px"><button type="button" onclick="heistAct('betray',${s.user_id})" class="hbtn hbtn-betray hbtn-sm">🔪 背叛他</button></div>` : ''}
           </div>`).join('')}
       </div>

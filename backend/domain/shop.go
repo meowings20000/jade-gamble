@@ -40,9 +40,12 @@ func CutReveal(s *Stone, doubleCoupon bool) (payout int) {
 
 // CutRevealWithGem: 正式切石流程——先擲隱藏彩蛋（5% 寶石），沒中就正常結算。
 // 舊的 CutReveal 保持「不含彩蛋」的純計算，讓既有測試與定價邏輯穩定。
-func CutRevealWithGem(s *Stone, doubleCoupon bool, r Rand) (payout int, gem *Gem) {
-	if g, ok := RollGem(r); ok {
-		return GemPayout(s, g, doubleCoupon), &g
+// ★ 集中活動 polish_luck：彩蛋機率 ×2（gemBoost = 2，一般 1）
+func CutRevealWithGem(s *Stone, doubleCoupon bool, r Rand, gemBoost float64) (payout int, gem *Gem) {
+	if r.Float64() < GemChance*gemBoost {
+		if g, ok := RollGem(r); ok {
+			return GemPayout(s, g, doubleCoupon), &g
+		}
 	}
 	return CutReveal(s, doubleCoupon), nil
 }
