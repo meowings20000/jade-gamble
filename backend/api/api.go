@@ -121,10 +121,19 @@ func (a *API) Routes() *http.ServeMux {
 	mux.HandleFunc("POST /api/ai/pool/contribute", a.handler(a.aiPoolContribute))
 	mux.HandleFunc("POST /api/ai/pool/open", a.handler(a.aiPoolOpen))
 	mux.HandleFunc("POST /api/ai/pool/sync", a.handler(a.aiPoolSync))
+	mux.HandleFunc("GET /api/ai/pool/quick20", a.handler(a.aiPoolQuick20))
 
 	// 裝飾品裝備（頭像框更換）
 	mux.HandleFunc("GET /api/cosmetics", a.handler(a.cosmeticsList))
 	mux.HandleFunc("POST /api/cosmetics/equip", a.handler(a.cosmeticsEquip))
+
+	// 簽到 + 升級賬戶 + 黑名單 + 玩家名單（2026-10-06）
+	mux.HandleFunc("GET /api/checkin", a.handler(a.checkinStatus))
+	mux.HandleFunc("POST /api/checkin", a.handler(a.checkin))
+	mux.HandleFunc("POST /api/account/upgrade", a.handler(a.accountUpgrade))
+	mux.HandleFunc("POST /api/bank/repay-debt", a.handler(a.bankRepayDebt))
+	mux.HandleFunc("GET /api/bank/blacklist", a.handler(a.bankBlacklist))
+	mux.HandleFunc("GET /api/players", a.handler(a.playersList))
 	return mux
 }
 
@@ -189,6 +198,7 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) error {
 		"id": u.ID, "username": u.Username, "avatar": u.Avatar,
 		"chips": u.Chips, "collection_score": u.CollectionScore, "title": u.Title,
 		"items": items, "discovered": varieties,
+		"vip": u.VIP, "debt": u.Debt, "checkin_done": u.CheckinDate == time.Now().UTC().Format("2006-01-02"),
 		"is_admin": a.isAdmin(uid), "discord_id": u.DiscordID,
 		"frame":  a.Store.EquippedFrame(uid),
 		"theme":  a.Store.EquippedTheme(uid),

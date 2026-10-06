@@ -423,3 +423,27 @@ func (s *Store) AIRoundReset() error {
 	_, err := s.db.Exec(`UPDATE ai_contrib SET round_total=0`)
 	return err
 }
+
+// Quick20 「捐池子 20%」按鈕的資料：目標額、我的已捐、還能捐多少、我的 chips
+type Quick20 struct {
+	Target int64
+	My     int64
+	Can    int64
+	Chips  int64
+}
+
+func (s *Store) Quick20(userID int) Quick20 {
+	var total, my, chips int64
+	_ = s.db.QueryRow(`SELECT COALESCE(SUM(total),0) FROM ai_contrib`).Scan(&total)
+	_ = s.db.QueryRow(`SELECT IFNULL(SUM(total),0) FROM ai_contrib WHERE user_id=?`, userID).Scan(&my)
+	_ = s.db.QueryRow(`SELECT chips FROM users WHERE id=?`, userID).Scan(&chips)
+	target := total * 20 / 100
+	can := target - my
+	if can < 0 {
+		can = 0
+	}
+	if userWantsMore := chips; can > userWantsMore {
+		can = userWantsMore // 不超過身家（不然一定被 ErrInsufficient 擋）
+	}
+	return Quick20{Target: target, My: my, Can: can, Chips: chips}
+}

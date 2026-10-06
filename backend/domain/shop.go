@@ -72,6 +72,7 @@ var ExchangeCatalog = []ExchangeItem{
 	{"polish_touch", "磨石手感", 5000, "buff",
 		"1 小時磨崩機率 −8%。"},
 	{"frame_gold", "賭場金頭像框", 2500, "cosmetic", "純裝飾：金邊頭像。"},
+	{"frame_juema", "尊爵喵頭像框", 0, "cosmetic", "升級賬戶專屬（不能單買）— 升級即送，炫耀位。"},
 	{"frame_imperial", "帝王綠頭像框", 5000, "cosmetic", "純裝飾：帝王綠光暈。"},
 	{"frame_cat", "喵喵框", 1200, "cosmetic", "純裝飾：貓耳粉邊（最便宜的一框）。"},
 	{"frame_violet", "紫羅蘭框", 3500, "cosmetic", "純裝飾：紫羅蘭色光暈。"},
@@ -103,12 +104,27 @@ func FrenzyTicketPayout(r Rand) int { return 1 + r.Intn(100) }
 // SignupChips: 開局籌碼（2026-09-16 由 1 萬提高到 5 萬）。
 const SignupChips = 50000
 
+// 簽到系統（2026-10-06）：
+//
+//	CheckinChips      = 一般賬戶每天簽到 10 萬（不限累計，就是每天領）
+//	VIPCheckinChips   = 升級賬戶每天 20 萬
+//	UpgradeCost       = 升級賬戶一次性 100 萬（永久）
+//	  perks：簽到 20 萬 + 專屬頭像框「尊爵喵」+ 名字金框 + 錢莊利率優惠 20%
 const (
-	// ReliefThreshold: 籌碼低於此數即可領救濟。
-	ReliefThreshold = 5000
-	// ReliefPerDay: 每 24 小時最多領幾次救濟（2026-09-17 用戶要求：1 天 3 次）。
-	ReliefPerDay   = 3
-	ReliefChips    = 50000
+	CheckinChips    = 100000
+	VIPCheckinChips = 200000
+	UpgradeCost     = 1000000
+	BankRateVIP     = 20.0 // 升級賬戶錢莊最低利率（一般 25%）
+)
+
+const (
+	// ReliefThreshold: 籌碼低於此數即可領救濟（2026-10-06 放寬：3 萬）。
+	ReliefThreshold = 30000
+	// ReliefPerDay: 每 24 小時最多領幾次救濟。
+	ReliefPerDay = 3
+	// ReliefChips: 每次救濟金額（5 萬不變；升級賬戶改的是「簽到」金額，不是救濟）。
+	ReliefChips = 50000
+	// ReliefAltChips: 刮刮票補貼（不變）。
 	ReliefAltChips = 300
 )
 

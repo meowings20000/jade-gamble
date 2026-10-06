@@ -40,6 +40,9 @@ func (s *Store) CreateYBossSessionTx(tx *Tx, userID, stake int) error {
 }
 
 func (s *Store) GetYBossSession(userID int) (*YBossSession, error) {
+	// ★ 孤兒救濟（2026-10-06，8 小時）：磨石進行中前端斷線 → session 永卡。
+	//   超過 8h 的進行中 session 自動退注結算（等同一開始就沒磨）。
+	s.reapStaleYBossSessions()
 	row := s.db.QueryRow(`SELECT id, user_id, stake, rung, finished FROM yboss_sessions
 		WHERE user_id=? AND finished=0 ORDER BY id DESC LIMIT 1`, userID)
 	var sess YBossSession
@@ -53,6 +56,23 @@ func (s *Store) GetYBossSession(userID int) (*YBossSession, error) {
 	}
 	sess.Finished = fin == 1
 	return &sess, nil
+}
+
+// reapStaleYBossSessions 8 小時以上的未結算 yboss session → 退注 + 結算
+// （rung 的落袋從未發過；stake 在下注時已扣 → 全數退回）
+func (s *Store) reapStaleYBossSessions() error {
+	// 一次搞定：對每個超時未結算 session，把 stake 退回主人、session 標記 finished
+	_, err := s.db.Exec(`UPDATE users SET chips = chips + IFNULL((
+		SELECT SUM(stake) FROM yboss_sessions ys
+		WHERE ys.user_id = users.id AND ys.finished = 0
+		  AND ys.created_at < datetime('now','-8 hours')
+	), 0)`)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`UPDATE yboss_sessions SET finished = 1
+		WHERE finished = 0 AND created_at < datetime('now','-8 hours')`)
+	return err
 }
 
 func (s *Store) SetYBossRungTx(tx *Tx, id, rung int) error {

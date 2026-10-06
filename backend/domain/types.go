@@ -22,6 +22,11 @@ type User struct {
 	ReliefAt        string
 	OldMasterRescue int
 	LastLoginDate   string
+	// 2026-10-06：黑名單 + 簽到 + 升級賬戶
+	Debt           int    // 沒收一半仍欠的錢（>0 = 帶債 = 禁借）
+	BlacklistUntil string // 還清後 3 天冷靜期截止（RFC3339 空=無）
+	CheckinDate    string // 今天簽到過了沒
+	VIP            int    // 升級賬戶（0=一般 1=升級）
 }
 
 // StoneState lifecycle.

@@ -15,7 +15,7 @@ import (
 
 const (
 	BankMinAmount = 5000
-	BankMaxAmount = 200000
+	BankMaxAmount = 1000000 // 2026-10-06 提高到 100 萬（user）
 	BankMinHours  = 1
 	BankMaxHours  = 24 // 遊戲裡沒有天數，期限用「實際時間」，最多 1 天
 	BankMaxAppeal = 3  // 最多申訴 3 輪

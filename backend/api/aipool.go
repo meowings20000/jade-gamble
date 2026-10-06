@@ -87,6 +87,18 @@ func (a *API) aiPoolOpen(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// aiPoolQuick20: GET /api/ai/pool/quick20 —— 「捐池子 20%」按鈕的可捐額
+func (a *API) aiPoolQuick20(w http.ResponseWriter, r *http.Request) error {
+	uid, err := a.userID(r)
+	if err != nil {
+		return err
+	}
+	q := a.Store.Quick20(uid)
+	writeJSON(w, 200, map[string]any{"ok": true, "target": q.Target, "my": q.My,
+		"can": q.Can, "available": q.Can > 0, "chips": q.Chips})
+	return nil
+}
+
 // aiPoolSync: POST /api/ai/pool/sync（DMIT 守門員）
 func (a *API) aiPoolSync(w http.ResponseWriter, r *http.Request) error {
 	// secret 驗證：X-AI-Sync-Token

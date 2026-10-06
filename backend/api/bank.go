@@ -85,6 +85,13 @@ func (a *API) bankApply(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	// ★ 黑名單（2026-10-06）：帶債 / 冷靜期 → 禁借
+	if debt, until, blocked := a.Store.BlacklistState(uid, time.Now()); blocked {
+		if debt > 0 {
+			return fmt.Errorf("你還欠錢莊 %s 喵 — 還清才能再借", shortChips(debt))
+		}
+		return fmt.Errorf("冷靜期中喵 — %s 之後才能再借", until)
+	}
 	if cur, _ := a.Store.ActiveLoan(uid); cur != nil {
 		return errors.New("你上一筆還沒還清喵")
 	}
@@ -94,7 +101,12 @@ func (a *API) bankApply(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if body.Rate < domain.BankRate {
-		body.Rate = domain.BankRate
+		// ★ 升級賬戶：錢莊利率底線 20%（2026-10-06）
+		if a.Store.IsVIP(uid) && body.Rate >= domain.BankRateVIP/100 {
+			body.Rate = domain.BankRateVIP / 100
+		} else {
+			body.Rate = domain.BankRate
+		}
 	}
 	if body.Rate > domain.BankMaxRate {
 		body.Rate = domain.BankMaxRate
@@ -448,10 +460,17 @@ func (a *API) seizeOverdue() {
 			if seize > 0 {
 				if _, err := store.UpdateChipsTx(tx, l.UserID, -seize); err != nil {
 					_, _ = store.UpdateChipsTx(tx, l.UserID, -u.Chips)
+					seize = u.Chips
 				}
 			}
 			for i := 0; i < take; i++ {
 				_ = a.Store.SetStoneStateTx(tx, ids[i], domain.StateUsed, 0)
+			}
+			// ★ 黑名單（2026-10-06）：現金沒收仍抵不完本息 → 記 debt（帶債禁借）
+			if remain := (l.Principal + l.Interest) - seize; remain > 0 {
+				if err := a.Store.ApplyDebtTx(tx, l.UserID, remain); err != nil {
+					return err
+				}
 			}
 			return a.Store.SetLoanStatusTx(tx, l.ID, "defaulted")
 		})

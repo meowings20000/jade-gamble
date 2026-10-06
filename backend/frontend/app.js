@@ -51,7 +51,7 @@ document.querySelectorAll('nav button').forEach(b =>
   b.addEventListener('click', () => {
     show(b.dataset.view);
     ({ shop: loadShop, warehouse: loadWarehouse, market: loadMarket,
-       exchange: () => { loadExchange(); if (typeof loadRewards === 'function') loadRewards(); },
+       exchange: () => { loadExchange(); if (typeof loadRewards === 'function') loadRewards(); if (typeof loadCheckin === 'function') loadCheckin(); },
        collection: () => { loadCollection(); loadGemBook(); }, ranks: loadRanks,
        transfer: loadTransfers, admin: loadAdmin, history: loadHistory, bank: loadBank,
        aipool: loadAIPool,
@@ -140,10 +140,40 @@ async function refreshMe() {
     if (me.theme) document.body.classList.add(me.theme);
     window.__hasFX = !!me.fx;
     // DC 頭像直接讀（OAuth 時存下來的 CDN 連結）＋兌換所的頭像框
+    // ★ 名字 pulldown（2026-10-06）：點名字開快捷選單
     $('#userbox').innerHTML =
       `<span class="avatar-ring ${me.frame ? esc(me.frame) : ''}">` +
       (me.avatar ? `<img src="${esc(me.avatar)}" alt="" referrerpolicy="no-referrer">` : '<span class="ph">🐾</span>') +
-      `</span><span>${(me.title ? `<b style="color:${TITLE_RARE[Number(me.title_rare) || 1] || 'var(--text)'}">【${esc(me.title)}】</b>` : '') + esc(me.username)}</span>`;
+      `</span><span id="ub-name" class="${me.vip ? 'vip-name' : ''}" style="cursor:pointer;user-select:none">${(me.title ? `<b style="color:${TITLE_RARE[Number(me.title_rare) || 1] || 'var(--text)'}">【${esc(me.title)}】</b>` : '') + esc(me.username)} ▾</span>` +
+      `<div id="ub-menu" style="display:none;position:absolute;top:40px;right:12px;background:var(--panel2,var(--panel));border:1px solid var(--gold,var(--line));border-radius:10px;padding:6px 0;min-width:150px;z-index:300;box-shadow:0 8px 24px rgba(0,0,0,.4)">
+        <button class="btn ghost" data-go="transfer" style="display:block;width:100%;text-align:left;border:none;border-radius:0">💸 轉賬</button>
+        <button class="btn ghost" data-go="exchange" style="display:block;width:100%;text-align:left;border:none;border-radius:0">🎁 兌換所</button>
+        <button class="btn ghost" data-go="aipool" style="display:block;width:100%;text-align:left;border:none;border-radius:0">🐱 AI 養殖場</button>
+        ${me.is_admin ? '<button class="btn ghost" data-go="admin" style="display:block;width:100%;text-align:left;border:none;border-radius:0">🛠 控制臺</button>' : ''}
+        <button class="btn ghost" id="ub-logout" style="display:block;width:100%;text-align:left;border:none;border-radius:0;color:var(--red)">🌙 登出</button>
+      </div>`;
+    // pulldown 事件
+    const nameEl = document.getElementById('ub-name');
+    const menuEl = document.getElementById('ub-menu');
+    if (nameEl && menuEl) {
+      nameEl.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        menuEl.style.display = menuEl.style.display === 'none' ? 'block' : 'none';
+      });
+      document.addEventListener('click', (ev) => {
+        if (menuEl.style.display !== 'none' && !menuEl.contains(ev.target)) menuEl.style.display = 'none';
+      });
+      menuEl.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => {
+        menuEl.style.display = 'none';
+        const btn = document.querySelector(`nav button[data-view="${b.dataset.go}"]`);
+        if (btn) btn.click();
+      }));
+      const lo = menuEl.querySelector('#ub-logout');
+      if (lo) lo.addEventListener('click', () => {
+        menuEl.style.display = 'none';
+        api('POST', '/api/auth/logout', {}).then(() => location.reload()).catch(() => location.reload());
+      });
+    }
     // 管理員才看得到控制臺
     const navAdmin = $('#nav-admin');
     if (navAdmin) navAdmin.style.display = me.is_admin ? '' : 'none';
@@ -758,6 +788,38 @@ $('#relief-chips').addEventListener('click', async () => {
   try { await api('POST', '/api/relief', { option: 'chips' }); toast('救濟已入帳'); refreshMe(); }
   catch (e) { toast(e.message); }
 });
+// ---------- 簽到 + 升級賬戶 ----------
+async function loadCheckin() {
+  try {
+    const r = await api('GET', '/api/checkin');
+    $('#checkin-state').textContent = r.checked ? `今天已簽 ✓（${fmt(r.amount)} 入過帳）` : `今天還沒簽 — 點右邊領 ${fmt(r.amount)}`;
+    $('#checkin-btn').disabled = r.checked;
+    $('#checkin-btn').textContent = r.checked ? '已簽到' : '📅 簽到領 ' + fmt(r.amount);
+    const up = document.getElementById('upgrade-btn');
+    if (up) {
+      if (r.vip) { up.style.display = 'none'; $('#upgrade-state').textContent = '👑 升級賬戶生效中（簽到 20 萬/天）'; }
+      else { up.style.display = ''; $('#upgrade-state').textContent = ''; }
+    }
+  } catch (e) {}
+}
+$('#checkin-btn').addEventListener('click', async () => {
+  try {
+    const r = await api('POST', '/api/checkin', {});
+    toast(`📅 簽到 +${fmt(r.amount)} 喵喵幣！`, true);
+    if (typeof r.chips === 'number') setChips(r.chips);
+    loadCheckin();
+  } catch (e) { toast(e.message); }
+});
+$('#upgrade-btn').addEventListener('click', async () => {
+  if (!confirm('花 100 萬喵喵幣永久升級賬戶？此動作不可逆。')) return;
+  try {
+    const r = await api('POST', '/api/account/upgrade', {});
+    toast('👑 升級成功！簽到變 20 萬、尊爵框已送倉庫', true);
+    if (typeof r.chips === 'number') setChips(r.chips);
+    loadCheckin();
+    refreshMe();
+  } catch (e) { toast(e.message); }
+});
 $('#relief-ticket').addEventListener('click', async () => {
   try { const r = await api('POST', '/api/relief', { option: 'ticket' }); toast(`刮到爽 +${fmt(r.total)} 喵喵幣`); refreshMe(); }
   catch (e) { toast(e.message); }
@@ -987,6 +1049,17 @@ refreshMe();
 // 不填條件 = 即時到賬；填了條件先扣錢託管，對方接受才入賬（拒絕/取消全額退還）。
 async function loadTransfers() {
   const d = await api('GET', '/api/transfers');
+  // ★ 玩家名單進 pulldown（點才拉，不預載）
+  const dl = document.getElementById('tf-to-list');
+  if (dl && !dl.options.length) {
+    api('GET', '/api/players').then(p => {
+      (p.players || []).forEach(pl => {
+        const o = document.createElement('option');
+        o.value = pl.username;
+        dl.appendChild(o);
+      });
+    }).catch(() => {});
+  }
   const box = (id, rows, render, empty) => {
     const el = $(id);
     if (!el) return;
@@ -1330,6 +1403,32 @@ async function loadAIPool() {
       } catch (e) { toast(e.message || '捐贈失敗'); }
     });
   }
+  // ★ 一鍵捐池子 20%（可捐 >0 且有身家才顯示）
+  const q20 = document.getElementById('quick20-wrap');
+  if (q20) {
+    try {
+      const q = await api('GET', '/api/ai/pool/quick20');
+      q20.style.display = q.available && q.can > 0 ? '' : 'none';
+      const qb = document.getElementById('quick20-btn');
+      const qs = document.getElementById('quick20-state');
+      if (qs) qs.textContent = `目前可捐 ${fmt(q.can)}（池子 20% = ${fmt(q.target)}，你已計入 ${fmt(q.my)}）`;
+      if (qb && !qb.dataset.hooked) {
+        qb.dataset.hooked = '1';
+        qb.addEventListener('click', async () => {
+          qb.disabled = true;
+          try {
+            const q2 = await api('GET', '/api/ai/pool/quick20');
+            const r = await api('POST', '/api/ai/pool/contribute', { amount: q2.can });
+            toast(`已捐入 ${fmt(q2.can)}（池子的 20%）🐱`, true);
+            if (typeof r.chips === 'number') setChips(r.chips);
+            const m = document.getElementById('aipool-mascot');
+            if (m && typeof clawdCoin === 'function') m.innerHTML = clawdCoin();
+            setTimeout(() => loadAIPool(), 1200);
+          } catch (e) { toast(e.message || '捐贈失敗'); qb.disabled = false; }
+        });
+      }
+    } catch (e) { q20.style.display = 'none'; }
+  }
   // ★ 開市按鈕：池子達標且未開市才顯示
   const openBtn = document.getElementById('aipool-open-btn');
   if (openBtn) {
@@ -1356,6 +1455,61 @@ function bankRow(k, v) {
 
 async function loadBank() {
   const d = await api('GET', '/api/bank');
+  // ★ 黑名單 + 我欠的錢
+  (async () => {
+    try {
+      const bl = await api('GET', '/api/bank/blacklist');
+      const box = document.getElementById('bank-blacklist');
+      if (box) {
+        box.innerHTML = (bl.board || []).length
+          ? '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+            (bl.board || []).map(r => `<tr><td style="padding:4px 6px;border-bottom:1px solid var(--border)">${esc(r.username)}</td><td style="padding:4px 6px;border-bottom:1px solid var(--border);text-align:right"><b style="color:var(--red)">欠 ${fmt(r.debt)}</b></td></tr>`).join('') +
+            '</table>'
+          : '<span style="color:var(--muted)">目前沒有老賴 ✨</span>';
+      }
+      // 我的債（從 /api/me 的 debt 來 —— 後端 me 需帶 debt；這裡用 blacklist 自己那筆判）
+      const me = await api('GET', '/api/me');
+      const mine = (bl.board || []).find(x => x.username === me.username);
+      const card = document.getElementById('bank-debt-card');
+      if (card) {
+        if (mine) {
+          card.style.display = '';
+          document.getElementById('bank-debt-info').innerHTML = `欠款 <b style="color:var(--red)">${fmt(mine.debt)}</b> 喵喵幣 — 還清前不能再借`;
+          const amtEl = document.getElementById('debt-amount');
+          if (amtEl && !amtEl.value) amtEl.value = mine.debt;
+        } else card.style.display = 'none';
+      }
+    } catch (e) {}
+  })();
+  // 還債按鈕（只掛一次）
+  const dAll = document.getElementById('debt-all');
+  if (dAll && !dAll.dataset.hooked) {
+    dAll.dataset.hooked = '1';
+    dAll.addEventListener('click', async () => {
+      try {
+        const bl = await api('GET', '/api/bank/blacklist');
+        const me = await api('GET', '/api/me');
+        const mine = (bl.board || []).find(x => x.username === me.username);
+        if (!mine) return toast('沒有欠款喵');
+        const r = await api('POST', '/api/bank/repay-debt', { amount: mine.debt });
+        toast(r.debt === 0 ? '債清了！3 天冷靜期後又能借喵' : `還了 ${fmt(mine.debt)}，剩欠 ${fmt(r.debt)}`, true);
+        setChips(r.chips); loadBank();
+      } catch (e) { toast(e.message); }
+    });
+  }
+  const dPay = document.getElementById('debt-pay');
+  if (dPay && !dPay.dataset.hooked) {
+    dPay.dataset.hooked = '1';
+    dPay.addEventListener('click', async () => {
+      const amt = parseInt(document.getElementById('debt-amount').value, 10);
+      if (!amt || amt <= 0) return toast('先填金額');
+      try {
+        const r = await api('POST', '/api/bank/repay-debt', { amount: amt });
+        toast(r.debt === 0 ? '債清了！3 天冷靜期後又能借喵' : `還了 ${fmt(amt)}，剩欠 ${fmt(r.debt)}`, true);
+        setChips(r.chips); loadBank();
+      } catch (e) { toast(e.message); }
+    });
+  }
   const t = d.terms || {};
   $('#bank-terms').innerHTML = [
     bankRow('借貸範圍', `${fmt(t.min)} ~ ${fmt(t.max)} 喵喵幣`),

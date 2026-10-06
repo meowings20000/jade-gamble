@@ -455,7 +455,7 @@ func (s *Store) EquippedFrame(userID int) string {
 		}
 	}
 	// fallback：舊邏輯（最貴的擁有框）
-	for _, key := range []string{"frame_rainbow", "frame_ink", "frame_imperial", "frame_violet", "frame_gold", "frame_cat"} {
+	for _, key := range []string{"frame_juema", "frame_rainbow", "frame_ink", "frame_imperial", "frame_violet", "frame_gold", "frame_cat"} {
 		var n int
 		if err := s.db.QueryRow(`SELECT COUNT(*) FROM inventory_items WHERE user_id = ? AND item_key = ?`, userID, key).Scan(&n); err == nil && n > 0 {
 			return key

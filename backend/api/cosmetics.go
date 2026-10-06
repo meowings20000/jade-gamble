@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-var frameKeys = []string{"frame_rainbow", "frame_ink", "frame_imperial", "frame_violet", "frame_gold", "frame_cat"}
+var frameKeys = []string{"frame_rainbow", "frame_ink", "frame_imperial", "frame_violet", "frame_gold", "frame_cat", "frame_juema"}
 
 // cosmeticsList: GET /api/cosmetics
 func (a *API) cosmeticsList(w http.ResponseWriter, r *http.Request) error {

@@ -336,6 +336,24 @@ func (s *Store) migrate() error {
 		!strings.Contains(err.Error(), "duplicate column") {
 		return fmt.Errorf("migrate equipped_frame: %w", err)
 	}
+	// 錢莊黑名單（2026-10-06）：沒收一半仍欠的錢 + 還清後 3 天冷靜期
+	if _, err := s.db.Exec(`ALTER TABLE users ADD COLUMN debt INTEGER NOT NULL DEFAULT 0`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column") {
+		return fmt.Errorf("migrate debt: %w", err)
+	}
+	if _, err := s.db.Exec(`ALTER TABLE users ADD COLUMN blacklist_until TEXT NOT NULL DEFAULT ''`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column") {
+		return fmt.Errorf("migrate blacklist_until: %w", err)
+	}
+	// 簽到 + 升級賬戶（2026-10-06）
+	if _, err := s.db.Exec(`ALTER TABLE users ADD COLUMN checkin_date TEXT NOT NULL DEFAULT ''`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column") {
+		return fmt.Errorf("migrate checkin_date: %w", err)
+	}
+	if _, err := s.db.Exec(`ALTER TABLE users ADD COLUMN vip INTEGER NOT NULL DEFAULT 0`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column") {
+		return fmt.Errorf("migrate vip: %w", err)
+	}
 
 	// 奪寶座位：玩家按「離開桌子」後就不要再顯示（歷史紀錄仍保留）
 	if _, err := s.db.Exec(`ALTER TABLE heist_seats ADD COLUMN left INTEGER NOT NULL DEFAULT 0`); err != nil &&
@@ -364,7 +382,8 @@ func (s *Store) migrate() error {
 
 func (s *Store) GetUserByDiscordID(discordID string) (*domain.User, error) {
 	row := s.db.QueryRow(`SELECT id, discord_id, username, avatar, chips, collection_score, title,
-		streak_brick, daily_win_streak, relief_used, relief_at, old_master_rescue, last_login_date FROM users WHERE discord_id=?`, discordID)
+		streak_brick, daily_win_streak, relief_used, relief_at, old_master_rescue, last_login_date,
+		debt, blacklist_until, checkin_date, vip FROM users WHERE discord_id=?`, discordID)
 	return scanUser(row)
 }
 
@@ -382,7 +401,7 @@ func (s *Store) CreateUser(discordID, username, avatar string) (*domain.User, er
 func scanUser(row *sql.Row) (*domain.User, error) {
 	u := &domain.User{}
 	err := row.Scan(&u.ID, &u.DiscordID, &u.Username, &u.Avatar, &u.Chips, &u.CollectionScore,
-		&u.Title, &u.StreakBrick, &u.DailyWinStreak, &u.ReliefUsed, &u.ReliefAt, &u.OldMasterRescue, &u.LastLoginDate)
+		&u.Title, &u.StreakBrick, &u.DailyWinStreak, &u.ReliefUsed, &u.ReliefAt, &u.OldMasterRescue, &u.LastLoginDate, &u.Debt, &u.BlacklistUntil, &u.CheckinDate, &u.VIP)
 	if err != nil {
 		return nil, err
 	}
@@ -397,7 +416,8 @@ func (s *Store) UpdateProfile(id int, username, avatar string) error {
 
 func (s *Store) GetUser(id int) (*domain.User, error) {
 	row := s.db.QueryRow(`SELECT id, discord_id, username, avatar, chips, collection_score, title,
-		streak_brick, daily_win_streak, relief_used, relief_at, old_master_rescue, last_login_date FROM users WHERE id=?`, id)
+		streak_brick, daily_win_streak, relief_used, relief_at, old_master_rescue, last_login_date,
+		debt, blacklist_until, checkin_date, vip FROM users WHERE id=?`, id)
 	return scanUser(row)
 }
 
