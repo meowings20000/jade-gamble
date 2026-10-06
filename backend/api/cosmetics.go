@@ -11,7 +11,8 @@ import (
 	"strings"
 )
 
-var frameKeys = []string{"frame_rainbow", "frame_ink", "frame_imperial", "frame_violet", "frame_gold", "frame_cat", "frame_juema"}
+// frameKeys：全部頭像框（貴 → 便宜；fallback「自動」用的排序）
+var frameKeys = []string{"frame_juema", "frame_rainbow", "frame_sunset", "frame_ghost", "frame_rose", "frame_steel", "frame_shadow", "frame_toxic", "frame_ink", "frame_flame", "frame_ice", "frame_imperial", "frame_violet", "frame_gold", "frame_cat"}
 
 // cosmeticsList: GET /api/cosmetics
 func (a *API) cosmeticsList(w http.ResponseWriter, r *http.Request) error {

@@ -51,7 +51,7 @@ document.querySelectorAll('nav button').forEach(b =>
   b.addEventListener('click', () => {
     show(b.dataset.view);
     ({ shop: loadShop, warehouse: loadWarehouse, market: loadMarket,
-       exchange: () => { loadExchange(); if (typeof loadRewards === 'function') loadRewards(); if (typeof loadCheckin === 'function') loadCheckin(); },
+       exchange: () => { loadExchange(); if (typeof loadCheckin === 'function') loadCheckin(); },
        collection: () => { loadCollection(); loadGemBook(); }, ranks: loadRanks,
        transfer: loadTransfers, admin: loadAdmin, history: loadHistory, bank: loadBank,
        aipool: loadAIPool,
